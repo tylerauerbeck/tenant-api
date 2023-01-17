@@ -24,9 +24,9 @@ import (
 	"go.infratographer.com/x/otelx"
 	"go.infratographer.com/x/versionx"
 
-	"go.infratographer.com/identityapi/internal/config"
-	"go.infratographer.com/identityapi/pkg/api"
-	"go.infratographer.com/identityapi/pkg/echox"
+	"go.infratographer.com/identity-api/internal/config"
+	"go.infratographer.com/identity-api/pkg/api"
+	"go.infratographer.com/identity-api/pkg/echox"
 )
 
 var (

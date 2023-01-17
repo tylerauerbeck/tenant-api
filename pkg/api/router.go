@@ -7,12 +7,12 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	permissions "go.infratographer.com/permissionapi/pkg/client/v1"
+	permissions "go.infratographer.com/permissions-api/pkg/client/v1"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
-var tracer = otel.Tracer("go.infratographer.com/identityapi/internal/api")
+var tracer = otel.Tracer("go.infratographer.com/identity-api/internal/api")
 
 // Router provides a router for the API
 type Router struct {

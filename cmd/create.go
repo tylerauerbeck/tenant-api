@@ -28,12 +28,12 @@ import (
 	"github.com/spf13/viper"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
-	"go.infratographer.com/permissionapi/pkg/pubsubx"
+	"go.infratographer.com/permissions-api/pkg/pubsubx"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/viperx"
 
-	"go.infratographer.com/identityapi/internal/config"
-	"go.infratographer.com/identityapi/internal/models"
+	"go.infratographer.com/identity-api/internal/config"
+	"go.infratographer.com/identity-api/internal/models"
 )
 
 var createCmd = &cobra.Command{

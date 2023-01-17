@@ -26,8 +26,8 @@ import (
 	"go.infratographer.com/x/versionx"
 	"go.uber.org/zap"
 
-	"go.infratographer.com/identityapi/internal/config"
-	"go.infratographer.com/identityapi/internal/dbschema"
+	"go.infratographer.com/identity-api/internal/config"
+	"go.infratographer.com/identity-api/internal/dbschema"
 )
 
 var (

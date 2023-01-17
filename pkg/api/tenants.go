@@ -11,9 +11,9 @@ import (
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	"go.infratographer.com/identityapi/internal/models"
-	"go.infratographer.com/identityapi/pkg/checker"
-	"go.infratographer.com/permissionapi/pkg/pubsubx"
+	"go.infratographer.com/identity-api/internal/models"
+	"go.infratographer.com/identity-api/pkg/checker"
+	"go.infratographer.com/permissions-api/pkg/pubsubx"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )

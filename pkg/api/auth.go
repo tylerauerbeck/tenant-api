@@ -16,7 +16,7 @@ import (
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	"go.infratographer.com/identityapi/internal/models"
+	"go.infratographer.com/identity-api/internal/models"
 )
 
 var (
@@ -82,27 +82,6 @@ var keyMap map[string]jwk.Set
 func init() {
 	keyMap = map[string]jwk.Set{}
 }
-
-// var oidcIssuers = []oidcIssuer{
-// 	{
-// 		Name:       "decuddle Server-Service Okta",
-// 		Issuer:     "https://sso.equinixmetal.com/oauth2/aus25zrmexjEfZbyd697",
-// 		Audience:   "https://delivery.metalkube.net",
-// 		ClientID:   "0oa26bxnzjpelULQc697",
-// 		SubClaim:   "uid",
-// 		EmailClaim: "sub",
-// 		NameClaim:  "name",
-// 	},
-// 	{
-// 		Name:       "Okta - infractl",
-// 		Issuer:     "https://sso.equinixmetal.com/oauth2/default",
-// 		Audience:   "api://default",
-// 		ClientID:   "0oa2tyocniJxGzxwR697",
-// 		SubClaim:   "uid",
-// 		EmailClaim: "email",
-// 		NameClaim:  "name",
-// 	},
-// }
 
 type userClaims struct {
 	issuer   *models.OidcIssuer

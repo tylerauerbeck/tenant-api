@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go.infratographer.com/identityapi/internal/models"
+	"go.infratographer.com/identity-api/internal/models"
 )
 
 // ErrorResponse represents the data that the server will return on any given call

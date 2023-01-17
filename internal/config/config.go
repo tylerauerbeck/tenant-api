@@ -1,7 +1,7 @@
 package config
 
 import (
-	"go.infratographer.com/identityapi/pkg/echox"
+	"go.infratographer.com/identity-api/pkg/echox"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/loggingx"
 	"go.infratographer.com/x/otelx"
