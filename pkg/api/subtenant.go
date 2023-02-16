@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"go.infratographer.com/identity-api/internal/models"
+	"go.infratographer.com/tenant-api/internal/models"
 )
 
 func (r *Router) subTenantList(c *gin.Context) {

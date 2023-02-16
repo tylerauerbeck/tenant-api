@@ -17,7 +17,7 @@ package main
 
 //go:generate sqlboiler crdb --add-soft-deletes
 
-import "go.infratographer.com/identity-api/cmd"
+import "go.infratographer.com/tenant-api/cmd"
 
 func main() {
 	cmd.Execute()

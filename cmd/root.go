@@ -26,19 +26,19 @@ import (
 	"go.infratographer.com/x/versionx"
 	"go.uber.org/zap"
 
-	"go.infratographer.com/identity-api/internal/config"
-	"go.infratographer.com/identity-api/internal/dbschema"
+	"go.infratographer.com/tenant-api/internal/config"
+	"go.infratographer.com/tenant-api/internal/dbschema"
 )
 
 var (
-	appName = "identityapi"
+	appName = "tenant-api"
 	cfgFile string
 	logger  *zap.SugaredLogger
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "infra-identity-api",
+	Use:   "infra-tenant-api",
 	Short: "Infratographer Identity API Service",
 }
 
@@ -53,8 +53,8 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/infratographer/identity-api.yaml)")
-	loggingx.MustViperFlags(rootCmd.PersistentFlags())
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/infratographer/tenant-api.yaml)")
+	loggingx.MustViperFlags(viper.GetViper(), rootCmd.PersistentFlags())
 
 	// Add migrate command
 	goosex.RegisterCobraCommand(rootCmd, func() {
@@ -74,7 +74,7 @@ func initConfig() {
 	} else {
 		viper.AddConfigPath("/etc/infratographer/")
 		viper.SetConfigType("yaml")
-		viper.SetConfigName("identity-api")
+		viper.SetConfigName("tenant-api")
 	}
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

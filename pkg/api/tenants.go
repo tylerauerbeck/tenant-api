@@ -11,9 +11,9 @@ import (
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	"go.infratographer.com/identity-api/internal/models"
-	"go.infratographer.com/identity-api/pkg/checker"
 	"go.infratographer.com/permissions-api/pkg/pubsubx"
+	"go.infratographer.com/tenant-api/internal/models"
+	"go.infratographer.com/tenant-api/pkg/checker"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -121,7 +121,7 @@ func (r *Router) tenantCreate(c echo.Context) error {
 		SubjectURN: "urn:infratographer:tenant:" + t.ID,
 		EventType:  "tenant.added",
 		ActorURN:   actor.URN,
-		Source:     "identityapi",
+		Source:     "tenant-api",
 		Timestamp:  time.Now(),
 		SubjectFields: map[string]string{
 			"id":         t.ID,

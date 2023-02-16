@@ -3,7 +3,7 @@ pkgname = "models"
 output = "internal/models"
 
 [crdb]
-dbname = "identityapi_dev"
+dbname = "tenantapi_dev"
 host = "crdb"
 port = 26257
 user = "root"

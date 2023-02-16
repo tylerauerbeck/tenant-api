@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var tracer = otel.Tracer("go.infratographer.com/identity-api/internal/api")
+var tracer = otel.Tracer("go.infratographer.com/tenant-api/internal/api")
 
 // Router provides a router for the API
 type Router struct {
@@ -63,8 +63,6 @@ func (r *Router) Routes(e *echo.Echo) {
 	e.HideBanner = true
 
 	e.HTTPErrorHandler = errorHandler
-
-	e.GET("api/v1/auth/request", r.authRequest)
 
 	e.Use(DefaultRequestType)
 
