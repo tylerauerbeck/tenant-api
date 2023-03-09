@@ -5,7 +5,7 @@ replace github.com/golang-jwt/jwt/v4 => github.com/golang-jwt/jwt/v4 v4.4.3-0.20
 go 1.19
 
 require (
-	github.com/cockroachdb/cockroach-go/v2 v2.2.19
+	github.com/cockroachdb/cockroach-go/v2 v2.3.0
 	github.com/friendsofgo/errors v0.9.2
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.13.0
@@ -65,7 +65,6 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.39.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
