@@ -18,30 +18,27 @@ import (
 	"github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"go.uber.org/zap"
-
-	"go.infratographer.com/x/versionx"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
 // NewServer will return an opinionated gin server for processing API requests.
-func NewServer(lgr *zap.Logger, cfg Config, version *versionx.Details) *echo.Echo {
-	// return Server{
-	// 	listen:          cfg.Listen,
-	// 	logger:          lgr.Named("echox"),
-	// 	version:         version,
-	// 	readinessChecks: map[string]checkFunc{},
-	// }
-
+func NewServer() *echo.Echo {
 	e := echo.New()
 
-	e.Use(middleware.RequestID())
 	// Middleware
+	e.Use(middleware.RequestID())
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(otelecho.Middleware("tenant-api", otelecho.WithSkipper(func(c echo.Context) bool {
+		return c.Path() == "/metrics"
+	})))
 
 	// Enable metrics middleware
 	p := prometheus.NewPrometheus("echo", nil)
 	p.Use(e)
+
+	e.HideBanner = true
+	e.HidePort = true
 
 	return e
 }

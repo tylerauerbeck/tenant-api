@@ -20,54 +20,47 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.infratographer.com/tenant-api/internal/config"
+	"go.infratographer.com/tenant-api/pkg/api/v1"
+	"go.infratographer.com/tenant-api/pkg/echox"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/otelx"
-	"go.infratographer.com/x/versionx"
-
-	"go.infratographer.com/tenant-api/internal/config"
-	"go.infratographer.com/tenant-api/pkg/api"
-	"go.infratographer.com/tenant-api/pkg/echox"
+	"go.uber.org/zap"
 )
 
 var (
-	APIDefaultListen = "0.0.0.0:7601"
+	APIDefaultListen = ":7601"
 )
 
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "starts the permission api server",
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Start Tenant API",
 	Run: func(cmd *cobra.Command, args []string) {
 		serve(cmd.Context())
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(serveCmd)
 
-	// ginx.MustViperFlags(viper.GetViper(), serverCmd.Flags(), APIDefaultListen)
-	echox.MustViperFlags(viper.GetViper(), serverCmd.Flags(), APIDefaultListen)
-	otelx.MustViperFlags(viper.GetViper(), serverCmd.Flags())
-	crdbx.MustViperFlags(viper.GetViper(), serverCmd.Flags())
+	echox.MustViperFlags(viper.GetViper(), serveCmd.Flags(), APIDefaultListen)
 }
 
 func serve(ctx context.Context) {
-	err := otelx.InitTracer(config.AppConfig.Tracing, appName, logger)
+	err := otelx.InitTracer(config.AppConfig.Tracing, appName, logger.Sugar())
 	if err != nil {
-		logger.Fatalw("unable to initialize tracing system", "error", err)
+		logger.Fatal("unable to initialize tracing system", zap.Error(err))
 	}
 
 	db, err := crdbx.NewDB(config.AppConfig.CRDB, config.AppConfig.Tracing.Enabled)
 	if err != nil {
-		logger.Fatalw("unable to initialize crdb client", "error", err)
+		logger.Fatal("unable to initialize crdb client", zap.Error(err))
 	}
 
-	e := echox.NewServer(logger.Desugar(), config.AppConfig.Server, versionx.BuildDetails())
+	e := echox.NewServer()
 	r := api.NewRouter(db, logger)
 
 	r.Routes(e)
-
-	// s = s.AddHandler(r).
-	// 	AddReadinessCheck("crdb", db.PingContext)
 
 	e.Logger.Fatal(e.Start(config.AppConfig.Server.Listen))
 }

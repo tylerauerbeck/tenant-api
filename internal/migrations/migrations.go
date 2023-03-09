@@ -1,6 +1,6 @@
-// Package dbschema provides an embedded filesystem containing all the database
+// Package migrations provides an embedded filesystem containing all the database
 // schema migrations
-package dbschema
+package migrations
 
 import (
 	"embed"
@@ -8,5 +8,5 @@ import (
 
 // Migrations contain an embedded filesystem with all the sql migration files
 //
-//go:embed migrations/*.sql
+//go:embed *.sql
 var Migrations embed.FS

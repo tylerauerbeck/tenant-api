@@ -21,25 +21,28 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.infratographer.com/tenant-api/internal/config"
+	"go.infratographer.com/tenant-api/internal/migrations"
+	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/goosex"
 	"go.infratographer.com/x/loggingx"
+	"go.infratographer.com/x/otelx"
 	"go.infratographer.com/x/versionx"
+	"go.infratographer.com/x/viperx"
 	"go.uber.org/zap"
-
-	"go.infratographer.com/tenant-api/internal/config"
-	"go.infratographer.com/tenant-api/internal/dbschema"
 )
 
+const appName = "tenant-api"
+
 var (
-	appName = "tenant-api"
 	cfgFile string
-	logger  *zap.SugaredLogger
+	logger  *zap.Logger
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "infra-tenant-api",
-	Short: "Infratographer Identity API Service",
+	Short: "Infratographer Tenant API Service handles tenant hierarchy",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -53,17 +56,28 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/infratographer/tenant-api.yaml)")
+	viperx.MustBindFlag(viper.GetViper(), "config", rootCmd.PersistentFlags().Lookup("config"))
+
+	// Logging flags
 	loggingx.MustViperFlags(viper.GetViper(), rootCmd.PersistentFlags())
+
+	// Register version command
+	versionx.RegisterCobraCommand(rootCmd, func() { versionx.PrintVersion(logger.Sugar()) })
+
+	// OTEL Flags
+	otelx.MustViperFlags(viper.GetViper(), rootCmd.Flags())
+
+	// Database Flags
+	crdbx.MustViperFlags(viper.GetViper(), rootCmd.Flags())
 
 	// Add migrate command
 	goosex.RegisterCobraCommand(rootCmd, func() {
-		goosex.SetBaseFS(dbschema.Migrations)
-		goosex.SetLogger(logger)
+		goosex.SetBaseFS(migrations.Migrations)
+		goosex.SetLogger(logger.Sugar())
 		goosex.SetDBURI(config.AppConfig.CRDB.GetURI())
 	})
-	// Add version command
-	versionx.RegisterCobraCommand(rootCmd, func() { versionx.PrintVersion(logger) })
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -77,23 +91,24 @@ func initConfig() {
 		viper.SetConfigName("tenant-api")
 	}
 
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.SetEnvPrefix(appName)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+	viper.SetEnvPrefix("tenantapi")
+
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	err := viper.ReadInConfig()
 
-	logger = loggingx.InitLogger(appName, config.AppConfig.Logging)
+	logger = loggingx.InitLogger(appName, config.AppConfig.Logging).Desugar()
 
 	if err == nil {
-		logger.Infow("using config file",
-			"file", viper.ConfigFileUsed(),
+		logger.Info("using config file",
+			zap.String("file", viper.ConfigFileUsed()),
 		)
 	}
 
 	err = viper.Unmarshal(&config.AppConfig)
 	if err != nil {
-		logger.Fatalw("unable to decode app config", "error", err)
+		logger.Fatal("unable to decode app config", zap.Error(err))
 	}
 }
