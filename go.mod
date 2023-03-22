@@ -8,7 +8,7 @@ require (
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/cockroachdb/cockroach-go/v2 v2.3.3
 	github.com/friendsofgo/errors v0.9.2
-	github.com/golang-jwt/jwt/v4 v4.4.3
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.14.1
 	github.com/labstack/echo-jwt/v4 v4.1.0
