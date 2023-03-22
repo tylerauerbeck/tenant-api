@@ -11,14 +11,16 @@ import (
 
 	"github.com/cockroachdb/cockroach-go/v2/testserver"
 	"github.com/pressly/goose/v3"
-	"go.infratographer.com/tenant-api/internal/migrations"
+	dbm "go.infratographer.com/tenant-api/db"
 	"go.infratographer.com/tenant-api/pkg/echox"
+	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.infratographer.com/x/crdbx"
 	"go.uber.org/zap"
 )
 
 type testServer struct {
 	*httptest.Server
+	client   *http.Client
 	closeFns []func()
 }
 
@@ -33,12 +35,16 @@ func (t *testServer) close() {
 }
 
 func (t *testServer) Request(method, path string, headers http.Header, body io.Reader, out interface{}) (*http.Response, error) {
+	return t.RequestWithClient(t.client, method, path, headers, body, out)
+}
+
+func (t *testServer) RequestWithClient(client *http.Client, method, path string, headers http.Header, body io.Reader, out interface{}) (*http.Response, error) {
 	uri, err := buildURL(t.Server.URL, path)
 	if err != nil {
 		return nil, err
 	}
 
-	return httpRequest(method, uri, headers, body, out)
+	return httpRequest(client, method, uri, headers, body, out)
 }
 
 func buildURL(baseURL, path string) (string, error) {
@@ -65,7 +71,7 @@ func buildURL(baseURL, path string) (string, error) {
 	return u.String(), nil
 }
 
-func httpRequest(method, uri string, headers http.Header, body io.Reader, out interface{}) (*http.Response, error) {
+func httpRequest(client *http.Client, method, uri string, headers http.Header, body io.Reader, out interface{}) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(context.Background(), method, uri, body)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
@@ -73,7 +79,7 @@ func httpRequest(method, uri string, headers http.Header, body io.Reader, out in
 
 	req.Header = headers
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return resp, err
 	}
@@ -86,7 +92,12 @@ func httpRequest(method, uri string, headers http.Header, body io.Reader, out in
 	return resp, err
 }
 
-func newTestServer() (*testServer, error) {
+type testServerConfig struct {
+	client *http.Client
+	auth   *jwtauth.AuthConfig
+}
+
+func newTestServer(config *testServerConfig) (*testServer, error) {
 	loggerConfig := zap.NewProductionConfig()
 	loggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 
@@ -96,6 +107,16 @@ func newTestServer() (*testServer, error) {
 	}
 
 	ts := new(testServer)
+
+	if config == nil {
+		config = new(testServerConfig)
+	}
+
+	if config.client != nil {
+		ts.client = config.client
+	} else {
+		ts.client = http.DefaultClient
+	}
 
 	srv, err := testserver.NewTestServer()
 	if err != nil {
@@ -122,7 +143,7 @@ func newTestServer() (*testServer, error) {
 		return nil, err
 	}
 
-	goose.SetBaseFS(migrations.Migrations)
+	goose.SetBaseFS(dbm.Migrations)
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		ts.Close()
@@ -130,7 +151,7 @@ func newTestServer() (*testServer, error) {
 		return nil, err
 	}
 
-	if err := goose.Up(db, "."); err != nil {
+	if err := goose.Up(db, "migrations"); err != nil {
 		ts.Close()
 
 		return nil, err
@@ -138,7 +159,18 @@ func newTestServer() (*testServer, error) {
 
 	e := echox.NewServer()
 
-	router := NewRouter(db, logger)
+	var auth *jwtauth.Auth
+
+	if config.auth != nil {
+		auth, err = jwtauth.NewAuth(*config.auth)
+		if err != nil {
+			ts.Close()
+
+			return nil, err
+		}
+	}
+
+	router := NewRouter(db, logger, auth)
 
 	router.Routes(e)
 

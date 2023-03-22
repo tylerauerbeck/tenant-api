@@ -21,8 +21,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	dbm "go.infratographer.com/tenant-api/db"
 	"go.infratographer.com/tenant-api/internal/config"
-	"go.infratographer.com/tenant-api/internal/migrations"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/goosex"
 	"go.infratographer.com/x/loggingx"
@@ -74,7 +74,7 @@ func init() {
 
 	// Add migrate command
 	goosex.RegisterCobraCommand(rootCmd, func() {
-		goosex.SetBaseFS(migrations.Migrations)
+		goosex.SetBaseFS(dbm.Migrations)
 		goosex.SetLogger(logger.Sugar())
 		goosex.SetDBURI(config.AppConfig.CRDB.GetURI())
 	})

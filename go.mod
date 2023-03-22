@@ -5,10 +5,13 @@ replace github.com/golang-jwt/jwt/v4 => github.com/golang-jwt/jwt/v4 v4.5.0
 go 1.19
 
 require (
+	github.com/MicahParks/keyfunc v1.9.0
 	github.com/cockroachdb/cockroach-go/v2 v2.3.0
 	github.com/friendsofgo/errors v0.9.2
+	github.com/golang-jwt/jwt/v4 v4.4.3
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.14.1
+	github.com/labstack/echo-jwt/v4 v4.1.0
 	github.com/labstack/echo/v4 v4.10.2
 	github.com/lib/pq v1.10.7
 	github.com/pkg/errors v0.9.1
@@ -26,6 +29,8 @@ require (
 	go.opentelemetry.io/otel v1.14.0
 	go.opentelemetry.io/otel/trace v1.14.0
 	go.uber.org/zap v1.24.0
+	golang.org/x/oauth2 v0.4.0
+	gopkg.in/square/go-jose.v2 v2.6.0
 )
 
 require (
@@ -91,6 +96,7 @@ require (
 	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc v1.53.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect

@@ -1,6 +1,10 @@
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 TOOLS_DIR := .tools
 
+DB=tenant_api
+DEV_DB=${DB}_dev
+DEV_URI="postgresql://root@crdb:26257/${DEV_DB}?sslmode=disable"
+
 # Determine OS and ARCH for some tool versions.
 OS := linux
 ARCH := amd64
@@ -41,13 +45,32 @@ GO_FILES=$(shell git ls-files '*.go')
 # Targets
 
 .PHONY: help
-help: Makefile ## Print help
+help: Makefile ## Print help.
 	@grep -h "##" $(MAKEFILE_LIST) | grep -v grep | sed -e 's/:.*##/#/' | column -c 2 -t -s#
+
+.PHONY: all
+all: lint test  ## Lints and tests.
+
+.PHONY: ci
+ci: | dev-database test  ## Setup dev database and run tests.
+
+.PHONY: dev-database
+dev-database: | vendor $(TOOLS_DIR)/cockroach  ## Initializes dev database "${DEV_DB}"
+	@$(TOOLS_DIR)/cockroach sql -e "drop database if exists ${DEV_DB}"
+	@$(TOOLS_DIR)/cockroach sql -e "create database ${DEV_DB}"
+	@TENANTAPI_DB_URI="${DEV_URI}" go run main.go migrate up
 
 .PHONY: test
 test:  ## Runs unit tests.
 	@echo Running unit tests...
 	@go test -timeout 30s -cover -short ./...
+
+.PHONY: coverage
+coverage: | $(TOOLS_DIR)/cockroach  ## Generates a test coverage report.
+	@echo Generating coverage report...
+	@go test -timeout 30s ./... -coverprofile=coverage.out -covermode=atomic
+	@go tool cover -func=coverage.out
+	@go tool cover -html=coverage.out
 
 .PHONY: lint
 lint: golint gci-diff  ## Runs all lint checks.

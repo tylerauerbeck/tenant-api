@@ -23,6 +23,7 @@ import (
 	"go.infratographer.com/tenant-api/internal/config"
 	"go.infratographer.com/tenant-api/pkg/api/v1"
 	"go.infratographer.com/tenant-api/pkg/echox"
+	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/otelx"
 	"go.uber.org/zap"
@@ -44,6 +45,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	echox.MustViperFlags(viper.GetViper(), serveCmd.Flags(), APIDefaultListen)
+	jwtauth.MustViperFlags(viper.GetViper(), serveCmd.Flags())
 }
 
 func serve(ctx context.Context) {
@@ -57,8 +59,19 @@ func serve(ctx context.Context) {
 		logger.Fatal("unable to initialize crdb client", zap.Error(err))
 	}
 
+	var auth *jwtauth.Auth
+
+	if jwksurl := viper.GetString("jwks.url"); jwksurl != "" {
+		auth, err = jwtauth.NewAuth(jwtauth.AuthConfig{
+			JWKSURI: jwksurl,
+		})
+		if err != nil {
+			logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
+		}
+	}
+
 	e := echox.NewServer()
-	r := api.NewRouter(db, logger)
+	r := api.NewRouter(db, logger, auth)
 
 	r.Routes(e)
 
