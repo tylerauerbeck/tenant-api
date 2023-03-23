@@ -8,10 +8,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"testing"
 
 	"github.com/cockroachdb/cockroach-go/v2/testserver"
+	natssrv "github.com/nats-io/nats-server/v2/server"
+	nats "github.com/nats-io/nats.go"
 	"github.com/pressly/goose/v3"
 	dbm "go.infratographer.com/tenant-api/db"
+	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/tenant-api/pkg/echox"
 	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.infratographer.com/x/crdbx"
@@ -20,7 +24,9 @@ import (
 
 type testServer struct {
 	*httptest.Server
+	logger   *zap.Logger
 	client   *http.Client
+	nats     *natssrv.Server
 	closeFns []func()
 }
 
@@ -97,7 +103,7 @@ type testServerConfig struct {
 	auth   *jwtauth.AuthConfig
 }
 
-func newTestServer(config *testServerConfig) (*testServer, error) {
+func newTestServer(t *testing.T, config *testServerConfig) (*testServer, error) {
 	loggerConfig := zap.NewProductionConfig()
 	loggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 
@@ -106,7 +112,9 @@ func newTestServer(config *testServerConfig) (*testServer, error) {
 		return nil, err
 	}
 
-	ts := new(testServer)
+	ts := &testServer{
+		logger: logger,
+	}
 
 	if config == nil {
 		config = new(testServerConfig)
@@ -157,6 +165,10 @@ func newTestServer(config *testServerConfig) (*testServer, error) {
 		return nil, err
 	}
 
+	ts.nats = newNatsTestServer(t, "tenant-api-test", "com.infratographer.events.>")
+
+	ts.closeFns = append(ts.closeFns, ts.nats.Shutdown)
+
 	e := echox.NewServer()
 
 	var auth *jwtauth.Auth
@@ -170,7 +182,7 @@ func newTestServer(config *testServerConfig) (*testServer, error) {
 		}
 	}
 
-	router := NewRouter(db, logger, auth)
+	router := NewRouter(db, logger, auth, newPubSubClient(t, logger, ts.nats.ClientURL()))
 
 	router.Routes(e)
 
@@ -179,4 +191,56 @@ func newTestServer(config *testServerConfig) (*testServer, error) {
 	ts.closeFns = append(ts.closeFns, ts.Server.Close)
 
 	return ts, nil
+}
+
+// newNatsTestServer creates a new nats server for testing and generates a new
+// stream. The returned server should be Shutdown() when testing is done.
+func newNatsTestServer(t *testing.T, stream string, subs ...string) *natssrv.Server {
+	srv, err := pubsub.StartNatsServer()
+	if err != nil {
+		t.Error(err)
+	}
+
+	nc, err := nats.Connect(srv.ClientURL())
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer nc.Close()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		t.Error(err)
+	}
+
+	if _, err = js.AddStream(&nats.StreamConfig{
+		Name:     stream,
+		Subjects: subs,
+		Storage:  nats.MemoryStorage,
+	}); err != nil {
+		t.Error(err)
+	}
+
+	return srv
+}
+
+func newPubSubClient(t *testing.T, logger *zap.Logger, url string) *pubsub.Client {
+	nc, err := nats.Connect(url)
+	if err != nil {
+		// fail open on nats
+		t.Error(err)
+	}
+
+	js, err := nc.JetStream()
+	if err != nil {
+		// fail open on nats
+		t.Error(err)
+	}
+
+	return pubsub.NewClient(
+		pubsub.WithJetreamContext(js),
+		pubsub.WithLogger(logger),
+		pubsub.WithStreamName("tenant-api-test"),
+		pubsub.WithSubjectPrefix("com.infratographer.events"),
+	)
 }

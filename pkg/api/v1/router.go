@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
@@ -21,13 +22,15 @@ type Router struct {
 	db     *sql.DB
 	logger *zap.Logger
 	auth   *jwtauth.Auth
+	pubsub *pubsub.Client
 }
 
-func NewRouter(db *sql.DB, l *zap.Logger, auth *jwtauth.Auth) *Router {
+func NewRouter(db *sql.DB, l *zap.Logger, auth *jwtauth.Auth, ps *pubsub.Client) *Router {
 	return &Router{
 		db:     db,
 		logger: l.Named("api"),
 		auth:   auth,
+		pubsub: ps,
 	}
 }
 
@@ -76,6 +79,11 @@ func (r *Router) Routes(e *echo.Echo) {
 
 		v1.GET("/tenants/:id/tenants", r.tenantList)
 		v1.POST("/tenants/:id/tenants", r.tenantCreate)
+	}
+
+	_, err := r.pubsub.AddStream()
+	if err != nil {
+		r.logger.Fatal("failed to add stream", zap.Error(err))
 	}
 }
 

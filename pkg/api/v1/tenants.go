@@ -8,6 +8,8 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"go.infratographer.com/tenant-api/internal/models"
+	"go.infratographer.com/tenant-api/internal/pubsub"
+	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -47,14 +49,34 @@ func (r *Router) tenantCreate(c echo.Context) error {
 		Name: createRequest.Name,
 	}
 
+	var additionalURNs []string
+
 	if tenantID != "" {
 		t.ParentTenantID = null.StringFrom(tenantID)
+		additionalURNs = append(additionalURNs, pubsub.NewTenantURN(tenantID))
 	}
 
 	if err := t.Insert(ctx, r.db, boil.Infer()); err != nil {
 		r.logger.Error("error inserting tenant", zap.Error(err))
 
 		return v1InternalServerErrorResponse(c, err)
+	}
+
+	actor := jwtauth.Actor(c)
+
+	msg, err := pubsub.NewTenantMessage(
+		actor,
+		pubsub.NewTenantURN(t.ID),
+		additionalURNs...,
+	)
+	if err != nil {
+		// TODO: add status to reconcile and requeue this
+		r.logger.Error("failed to create tenant message", zap.Error(err))
+	}
+
+	if err := r.pubsub.PublishCreate(ctx, "tenants", "global", msg); err != nil {
+		// TODO: add status to reconcile and requeue this
+		r.logger.Error("failed to publish tenant message", zap.Error(err))
 	}
 
 	return v1TenantCreatedResponse(c, t)

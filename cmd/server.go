@@ -18,9 +18,11 @@ package cmd
 import (
 	"context"
 
+	nats "github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.infratographer.com/tenant-api/internal/config"
+	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/tenant-api/pkg/api/v1"
 	"go.infratographer.com/tenant-api/pkg/echox"
 	"go.infratographer.com/tenant-api/pkg/jwtauth"
@@ -59,6 +61,13 @@ func serve(ctx context.Context) {
 		logger.Fatal("unable to initialize crdb client", zap.Error(err))
 	}
 
+	js, natsClose, err := newJetstreamConnection()
+	if err != nil {
+		logger.Fatal("failed to create NATS jetstream connection", zap.Error(err))
+	}
+
+	defer natsClose()
+
 	var auth *jwtauth.Auth
 
 	if jwksurl := viper.GetString("jwks.url"); jwksurl != "" {
@@ -71,9 +80,43 @@ func serve(ctx context.Context) {
 	}
 
 	e := echox.NewServer()
-	r := api.NewRouter(db, logger, auth)
+	r := api.NewRouter(
+		db,
+		logger,
+		auth,
+		pubsub.NewClient(
+			pubsub.WithJetreamContext(js),
+			pubsub.WithLogger(logger),
+			pubsub.WithStreamName(viper.GetString("nats.stream-name")),
+			pubsub.WithSubjectPrefix(viper.GetString("nats.subject-prefix")),
+		),
+	)
 
 	r.Routes(e)
 
 	e.Logger.Fatal(e.Start(config.AppConfig.Server.Listen))
+}
+
+func newJetstreamConnection() (nats.JetStreamContext, func(), error) {
+	opts := []nats.Option{nats.Name(appName)}
+
+	if viper.GetBool("debug") {
+		logger.Debug("enabling development settings")
+
+		opts = append(opts, nats.Token(viper.GetString("nats.token")))
+	} else {
+		opts = append(opts, nats.UserCredentials(viper.GetString("nats.creds-file")))
+	}
+
+	nc, err := nats.Connect(viper.GetString("nats.url"), opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	js, err := nc.JetStream()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return js, nc.Close, nil
 }

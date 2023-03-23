@@ -1,18 +1,30 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	nats "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/tenant-api/pkg/jwtauth"
+	"go.infratographer.com/x/pubsubx"
+)
+
+const (
+	natsMsgSubTimeout   = 2 * time.Second
+	tenantSubjectCreate = "com.infratographer.events.tenants.create.global"
+	tenantBaseURN       = "urn:infratographer:tenants:"
 )
 
 func TestTenantsWithoutAuth(t *testing.T) {
-	srv, err := newTestServer(nil)
+	srv, err := newTestServer(t, nil)
 	defer srv.close()
 
 	require.NoError(t, err, "no error expected for new test server")
@@ -29,6 +41,25 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		assert.Len(t, result.Tenants, 0, "expected no tenants")
 	})
 
+	subscriber := newPubSubClient(t, srv.logger, srv.nats.ClientURL())
+	msgChan := make(chan *nats.Msg, 10)
+
+	// create a new nats subscription on the server created above
+	subscription, err := subscriber.ChanSubscribe(
+		context.TODO(),
+		"com.infratographer.events.tenants.>",
+		msgChan,
+		"tenant-api-test",
+	)
+
+	require.NoError(t, err)
+
+	defer func() {
+		if err := subscription.Unsubscribe(); err != nil {
+			t.Error(err)
+		}
+	}()
+
 	var t1Resp *v1TenantResponse
 
 	t.Run("new tenant", func(t *testing.T) {
@@ -39,6 +70,20 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
 		assert.NotEmpty(t, t1Resp.Tenant.ID, "expected tenant id")
 		assert.Equal(t, "tenant1", t1Resp.Tenant.Name, "unexpected tenant name")
+
+		select {
+		case msg := <-msgChan:
+			pMsg := &pubsubx.Message{}
+			err = json.Unmarshal(msg.Data, pMsg)
+			require.NoError(t, err)
+
+			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
+			assert.Equal(t, "", pMsg.ActorURN, "expected no actor for unauthenticated client")
+			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
+			assert.Equal(t, tenantBaseURN+t1Resp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+		case <-time.After(natsMsgSubTimeout):
+			t.Error("failed to receive nats message")
+		}
 	})
 
 	var t1aResp *v1TenantResponse
@@ -53,6 +98,22 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		assert.Equal(t, "tenant1.a", t1aResp.Tenant.Name, "unexpected tenant name")
 		require.NotNil(t, t1aResp.Tenant.ParentTenantID, "expected parent tenant id to be set")
 		assert.Equal(t, t1Resp.Tenant.ID, *t1aResp.Tenant.ParentTenantID, "unexpected parent tenant id")
+
+		select {
+		case msg := <-msgChan:
+			pMsg := &pubsubx.Message{}
+			err = json.Unmarshal(msg.Data, pMsg)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
+			assert.Equal(t, "", pMsg.ActorURN, "expected no actor for unauthenticated client")
+			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
+			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+			require.NotEmpty(t, pMsg.AdditionalSubjectURNs, "expected additional subject urns")
+			assert.Contains(t, pMsg.AdditionalSubjectURNs, tenantBaseURN+t1Resp.Tenant.ID, "expected parent urn in additional subject urns")
+		case <-time.After(natsMsgSubTimeout):
+			t.Error("failed to receive nats message")
+		}
 	})
 
 	t.Run("list tenants", func(t *testing.T) {
@@ -84,7 +145,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	oauthClient, jwksURI, close := jwtauth.TestOAuthClient("urn:test:user")
 	defer close()
 
-	srv, err := newTestServer(&testServerConfig{
+	srv, err := newTestServer(t, &testServerConfig{
 		client: oauthClient,
 		auth: &jwtauth.AuthConfig{
 			JWKSURI: jwksURI,
@@ -110,6 +171,25 @@ func TestTenantsWithAuth(t *testing.T) {
 		assert.Len(t, result.Tenants, 0, "expected no tenants")
 	})
 
+	subscriber := newPubSubClient(t, srv.logger, srv.nats.ClientURL())
+	msgChan := make(chan *nats.Msg, 10)
+
+	// create a new nats subscription on the server created above
+	subscription, err := subscriber.ChanSubscribe(
+		context.TODO(),
+		"com.infratographer.events.tenants.>",
+		msgChan,
+		"tenant-api-test",
+	)
+
+	require.NoError(t, err)
+
+	defer func() {
+		if err := subscription.Unsubscribe(); err != nil {
+			t.Error(err)
+		}
+	}()
+
 	var t1Resp *v1TenantResponse
 
 	t.Run("new tenant", func(t *testing.T) {
@@ -127,6 +207,20 @@ func TestTenantsWithAuth(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
 		assert.NotEmpty(t, t1Resp.Tenant.ID, "expected tenant id")
 		assert.Equal(t, "tenant1", t1Resp.Tenant.Name, "unexpected tenant name")
+
+		select {
+		case msg := <-msgChan:
+			pMsg := &pubsubx.Message{}
+			err = json.Unmarshal(msg.Data, pMsg)
+			require.NoError(t, err)
+
+			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
+			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
+			assert.Equal(t, tenantBaseURN+t1Resp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+		case <-time.After(natsMsgSubTimeout):
+			t.Error("failed to receive nats message")
+		}
 	})
 
 	var t1aResp *v1TenantResponse
@@ -148,6 +242,22 @@ func TestTenantsWithAuth(t *testing.T) {
 		assert.Equal(t, "tenant1.a", t1aResp.Tenant.Name, "unexpected tenant name")
 		require.NotNil(t, t1aResp.Tenant.ParentTenantID, "expected parent tenant id to be set")
 		assert.Equal(t, t1Resp.Tenant.ID, *t1aResp.Tenant.ParentTenantID, "unexpected parent tenant id")
+
+		select {
+		case msg := <-msgChan:
+			pMsg := &pubsubx.Message{}
+			err = json.Unmarshal(msg.Data, pMsg)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
+			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
+			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+			require.NotEmpty(t, pMsg.AdditionalSubjectURNs, "expected additional subject urns")
+			assert.Contains(t, pMsg.AdditionalSubjectURNs, tenantBaseURN+t1Resp.Tenant.ID, "expected parent urn in additional subject urns")
+		case <-time.After(natsMsgSubTimeout):
+			t.Error("failed to receive nats message")
+		}
 	})
 
 	t.Run("list tenants", func(t *testing.T) {
