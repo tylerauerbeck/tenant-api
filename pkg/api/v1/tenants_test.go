@@ -33,6 +33,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		var result *v1TenantSliceResponse
 
 		resp, err := srv.Request(http.MethodGet, "/v1/tenants", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 
@@ -66,6 +67,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		createRequest := strings.NewReader(`{"name": "tenant1"}`)
 
 		resp, err := srv.Request(http.MethodPost, "/v1/tenants", nil, createRequest, &t1Resp)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating tenant")
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
 		assert.NotEmpty(t, t1Resp.Tenant.ID, "expected tenant id")
@@ -92,6 +94,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		createRequest := strings.NewReader(`{"name": "tenant1.a"}`)
 
 		resp, err := srv.Request(http.MethodPost, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, createRequest, &t1aResp)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating subtenant")
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
 		assert.NotEmpty(t, t1aResp.Tenant.ID, "expected tenant id")
@@ -120,6 +123,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		var result *v1TenantSliceResponse
 
 		resp, err := srv.Request(http.MethodGet, "/v1/tenants", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 
@@ -132,6 +136,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 		var result *v1TenantSliceResponse
 
 		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 
@@ -157,12 +162,14 @@ func TestTenantsWithAuth(t *testing.T) {
 
 	t.Run("no tenants", func(t *testing.T) {
 		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodGet, "/v1/tenants", nil, nil, nil)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
 
 		var result *v1TenantSliceResponse
 
 		resp, err = srv.Request(http.MethodGet, "/v1/tenants", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 
@@ -196,6 +203,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		createRequest := strings.NewReader(`{"name": "tenant1"}`)
 
 		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPost, "/v1/tenants", nil, createRequest, nil)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
 
@@ -203,6 +211,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		assert.NoError(t, err, "no error expected for seek")
 
 		resp, err = srv.Request(http.MethodPost, "/v1/tenants", nil, createRequest, &t1Resp)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating tenant")
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
 		assert.NotEmpty(t, t1Resp.Tenant.ID, "expected tenant id")
@@ -229,6 +238,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		createRequest := strings.NewReader(`{"name": "tenant1.a"}`)
 
 		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPost, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, createRequest, nil)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating subtenant")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
 
@@ -236,6 +246,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		assert.NoError(t, err, "no error expected for seek")
 
 		resp, err = srv.Request(http.MethodPost, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, createRequest, &t1aResp)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating subtenant")
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
 		assert.NotEmpty(t, t1aResp.Tenant.ID, "expected tenant id")
@@ -264,6 +275,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		var result *v1TenantSliceResponse
 
 		resp, err := srv.Request(http.MethodGet, "/v1/tenants", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 
@@ -276,6 +288,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		var result *v1TenantSliceResponse
 
 		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 

@@ -10,5 +10,5 @@ var (
 	ErrUUIDNotFound = errors.New("UUID not found in path")
 
 	// ErrTenantNameMissing is returned when the Tenant Name is not defined.
-	ErrTenantNameMissing = errors.New("Tenant Name is missing")
+	ErrTenantNameMissing = errors.New("tenant name is missing")
 )

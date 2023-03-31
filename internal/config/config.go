@@ -1,3 +1,4 @@
+// Package config defines the application config used through tenant-api.
 package config
 
 import (
@@ -7,6 +8,7 @@ import (
 	"go.infratographer.com/x/otelx"
 )
 
+// AppConfig contains the application configuration structure.
 var AppConfig struct {
 	CRDB    crdbx.Config
 	Logging loggingx.Config

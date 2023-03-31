@@ -4,11 +4,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	natssrv "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-
-	natssrv "github.com/nats-io/nats-server/v2/server"
 )
 
 var natsSrv *natssrv.Server

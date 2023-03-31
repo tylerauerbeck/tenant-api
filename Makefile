@@ -34,10 +34,10 @@ COCKROACH_VERSION_FILE = cockroach-$(COCKROACH_VERSION).$(OS_VERSION)-$(ARCH)
 COCKROACH_RELEASE_URL = https://binaries.cockroachdb.com/$(COCKROACH_VERSION_FILE).tgz
 
 GCI_REPO = github.com/daixiang0/gci
-GCI_VERSION = v0.9.1
+GCI_VERSION = v0.10.1
 
 GOLANGCI_LINT_REPO = github.com/golangci/golangci-lint
-GOLANGCI_LINT_VERSION = v1.50.1
+GOLANGCI_LINT_VERSION = v1.51.2
 
 # go files to be checked
 GO_FILES=$(shell git ls-files '*.go')
@@ -52,7 +52,7 @@ help: Makefile ## Print help.
 all: lint test  ## Lints and tests.
 
 .PHONY: ci
-ci: | dev-database test  ## Setup dev database and run tests.
+ci: | dev-database golint test coverage  ## Setup dev database and run tests.
 
 .PHONY: dev-database
 dev-database: | vendor $(TOOLS_DIR)/cockroach  ## Initializes dev database "${DEV_DB}"
@@ -85,7 +85,7 @@ vendor:  ## Downloads and tidies go modules.
 
 .PHONY: gci-diff gci-write gci
 gci-diff: $(GO_FILES) | $(TOOLS_DIR)/gci  ## Outputs improper go import ordering.
-	@results=`$(TOOLS_DIR)/gci diff -s 'standard,default,prefix(github.com/infratographer)' $^` \
+	@results=`$(TOOLS_DIR)/gci diff -s standard -s default -s 'prefix(github.com/infratographer)' $^` \
 		&& echo "$$results" \
 		&& [ -n "$$results" ] \
 			&& [ "$(IGNORE_DIFF_ERROR)" != "true" ] \
@@ -93,7 +93,7 @@ gci-diff: $(GO_FILES) | $(TOOLS_DIR)/gci  ## Outputs improper go import ordering
 			&& exit 1 || true
 
 gci-write: $(GO_FILES) | $(TOOLS_DIR)/gci  ## Checks and updates all go files for proper import ordering.
-	@$(TOOLS_DIR)/gci write -s 'standard,default,prefix(github.com/infratographer)' $^
+	@$(TOOLS_DIR)/gci write -s standard -s default -s 'prefix(github.com/infratographer)' $^
 
 gci: IGNORE_DIFF_ERROR=true
 gci: | gci-diff gci-write  ## Outputs and corrects all improper go import ordering.

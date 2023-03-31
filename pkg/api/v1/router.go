@@ -25,6 +25,7 @@ type Router struct {
 	pubsub *pubsub.Client
 }
 
+// NewRouter creates a new APIv1 router.
 func NewRouter(db *sql.DB, l *zap.Logger, auth *jwtauth.Auth, ps *pubsub.Client) *Router {
 	return &Router{
 		db:     db,

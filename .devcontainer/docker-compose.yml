@@ -4,8 +4,8 @@ networks:
   infradev:
 
 volumes:
-  crdb:
-    null
+  crdb: null
+  audit: null
 
 services:
   app:
@@ -20,11 +20,40 @@ services:
       - .env
     volumes:
       - ..:/workspace:cached
+      - audit:/app-audit
     networks:
       - infradev
+    depends_on:
+      - init-audit
     # Use "forwardPorts" in **devcontainer.json** to forward a port locally.
     # (Adding the "ports" property to this file will not forward from a Codespace.)
 
+  fix-perms-audit:
+    image: alpine:3.17
+    command:
+      - ash
+      - -c
+      - |
+        chown -R 65532:65532 /app-audit
+    volumes:
+      - audit:/app-audit
+
+  init-audit:
+    image: ghcr.io/metal-toolbox/audittail:v0.6.1
+    command: init -f /app-audit/audit.log
+    depends_on:
+      - fix-perms-audit
+    volumes:
+      - audit:/app-audit
+
+  audit:
+    image: ghcr.io/metal-toolbox/audittail:v0.6.1
+    command: -f /app-audit/audit.log
+    depends_on:
+      - init-audit
+    volumes:
+      - audit:/app-audit
+    restart: unless-stopped
 
   # Environment setup
   create_databases:

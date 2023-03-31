@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	// ActorKey defines the context key an actor is stored in.
 	ActorKey = "actor"
 )
 
