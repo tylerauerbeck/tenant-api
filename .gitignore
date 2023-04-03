@@ -16,3 +16,13 @@
 
 # Ignore installed tools
 .tools
+
+# devcontainer artifacts
+.devcontainer/nats/resolver.conf
+.devcontainer/nsc
+
+# Files used in the build and test in the CI environment
+.go/
+
+# Exclude any manually generated helm package
+chart/tenant-api/tenant-api-*.tgz

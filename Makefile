@@ -61,16 +61,20 @@ dev-database: | vendor $(TOOLS_DIR)/cockroach  ## Initializes dev database "${DE
 	@TENANTAPI_DB_URI="${DEV_URI}" go run main.go migrate up
 
 .PHONY: test
-test:  ## Runs unit tests.
+test: | $(TOOLS_DIR)/cockroach  ## Runs unit tests.
 	@echo Running unit tests...
-	@go test -timeout 30s -cover -short ./...
+	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+		go test -timeout 30s -cover -short ./...
 
 .PHONY: coverage
 coverage: | $(TOOLS_DIR)/cockroach  ## Generates a test coverage report.
 	@echo Generating coverage report...
-	@go test -timeout 30s ./... -coverprofile=coverage.out -covermode=atomic
-	@go tool cover -func=coverage.out
-	@go tool cover -html=coverage.out
+	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+		go test -timeout 30s ./... -coverprofile=coverage.out -covermode=atomic
+	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+		go tool cover -func=coverage.out
+	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+		go tool cover -html=coverage.out
 
 .PHONY: lint
 lint: golint gci-diff  ## Runs all lint checks.
@@ -106,9 +110,6 @@ $(TOOLS_DIR)/cockroach: $(TOOLS_DIR)
 	@echo "Downloading cockroach: $(COCKROACH_RELEASE_URL)"
 	@curl --silent --fail "$(COCKROACH_RELEASE_URL)" \
 		| tar -xz --strip-components 1 -C $< $(COCKROACH_VERSION_FILE)/cockroach
-	
-	# copied to GOPATH/bin as go test requires it to be in the path.
-	@cp "$@" "$(shell go env GOPATH)/bin"
 
 	$@ version
 

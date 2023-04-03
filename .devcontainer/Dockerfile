@@ -1,20 +1,37 @@
-# [Choice] Go version (use -bullseye variants on local arm64/Apple Silicon): 1, 1.18, 1.17, 1-bullseye, 1.18-bullseye, 1.17-bullseye, 1-buster, 1.18-buster, 1.17-buster
-ARG VARIANT=1-bullseye
-FROM mcr.microsoft.com/vscode/devcontainers/go:0-${VARIANT}
+FROM mcr.microsoft.com/vscode/devcontainers/go:0-1.20-bullseye
 
 # [Optional] Uncomment this section to install additional OS packages.
-# RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-#     && apt-get -y install --no-install-recommends <your-package-list-here>
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg \
+    &&  curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor > /usr/share/keyrings/yarn-archive-keyring.gpg \
+    && apt-get install apt-transport-https --yes \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list \
+    && apt-get update \
+    && apt-get -y install --no-install-recommends \
+        bash-completion \
+        helm \
+        uuid-runtime \
+        postgresql-client
 
-# Install cockroachdb so we have the client
-RUN curl https://binaries.cockroachdb.com/cockroach-v22.1.8.linux-amd64.tgz | tar -xz \
-    && sudo cp -i cockroach-v22.1.8.linux-amd64/cockroach /usr/local/bin/ \
-    && rm -rf cockroach-v*
 
-# [Optional] Uncomment the next lines to use go get to install anything else you need
-# USER vscode
-# RUN go get -x <your-dependency-or-tool>
-# USER root
+# Install NATS Tooling
+RUN curl -o /tmp/install.sh  https://raw.githubusercontent.com/nats-io/nsc/main/install.sh \
+    && chmod +x /tmp/install.sh \
+    && su vscode -c "/tmp/install.sh -s /usr/local/bin" \
+    && rm -f /tmp/install.sh \
+
+USER vscode
+
+ENV NATS_CLI_VERSION=0.0.35
+
+RUN go install -v github.com/cweill/gotests/gotests@v1.6.0 \
+    && go install github.com/volatiletech/sqlboiler/v4@latest \
+    && go install github.com/volatiletech/sqlboiler/v4/drivers/sqlboiler-psql@latest \
+    && go install github.com/glerchundi/sqlboiler-crdb/v4@latest \
+    && go install github.com/nats-io/natscli/nats@v${NATS_CLI_VERSION} \
+    && go install github.com/nats-io/nkeys/nk@latest
 
 # [Optional] Uncomment this line to install global node packages.
 # RUN su vscode -c "source /usr/local/share/nvm/nvm.sh && npm install -g <your-package-here>" 2>&1
+
+WORKDIR /workspace

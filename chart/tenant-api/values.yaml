@@ -1,0 +1,90 @@
+image:
+  repository: ghcr.io/infratographer/tenant-api
+  tag: "v0.0.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  sessionAffinity: None
+  annotations: {}
+
+ingress:
+  enabled: false
+  annotations: {}
+  hosts: []
+  tls: {}
+
+api:
+  replicas: 1
+  listenPort: 7601
+  extraLabels: {}
+  extraAnnotations: {}
+  extraEnvVars: {}
+  resources: {}
+  podSecurityContext: {}
+  securityContext: {}
+  events:
+    connectionURL: "my-events-cluster.example.com:4222"
+    auth:
+      secretName: "events-creds"
+      credsPath: "/nats/creds"
+    subjects: "events"
+    queue: "tenant"
+  db:
+    uriSecret: tenant-api-db-uri
+    certSecret: tenant-api-db-ca
+  migrateOnInit: true
+
+  oidc:
+    enabled: false
+    audience: ""
+    issuer: ""
+    jwks:
+      uri: ""
+      remoteTimeout: 1m
+
+# -- (dict) configures metal-toolbox/audittail
+audit:
+  # -- (bool) toggles audittail
+  enabled: true
+  # -- (dict) Infomation about the audittail image
+  image:
+    registry: ghcr.io
+    repository: metal-toolbox/audittail
+    tag: v0.6.1
+    pullPolicy: IfNotPresent
+  # -- (dict) Resources for the audittail container
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  init:
+    # -- (dict) Resources for the audittail init container
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+reloader:
+  enabled: false
