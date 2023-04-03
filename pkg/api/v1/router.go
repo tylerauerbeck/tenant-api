@@ -6,7 +6,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"go.infratographer.com/tenant-api/internal/pubsub"
-	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
@@ -21,16 +20,14 @@ var tracer = otel.Tracer("go.infratographer.com/tenant-api/pkg/api/v1")
 type Router struct {
 	db     *sql.DB
 	logger *zap.Logger
-	auth   *jwtauth.Auth
 	pubsub *pubsub.Client
 }
 
 // NewRouter creates a new APIv1 router.
-func NewRouter(db *sql.DB, l *zap.Logger, auth *jwtauth.Auth, ps *pubsub.Client) *Router {
+func NewRouter(db *sql.DB, l *zap.Logger, ps *pubsub.Client) *Router {
 	return &Router{
 		db:     db,
 		logger: l.Named("api"),
-		auth:   auth,
 		pubsub: ps,
 	}
 }
@@ -68,8 +65,6 @@ func (r *Router) Routes(e *echo.Echo) {
 	v1 := e.Group(apiVersion)
 	{
 		v1.GET("/", r.apiVersion)
-
-		v1.Use(r.auth.Middleware())
 
 		v1.GET("/tenants", r.tenantList)
 		v1.POST("/tenants", r.tenantCreate)

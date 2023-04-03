@@ -120,13 +120,21 @@ func testHelperGetToken(signer jose.Signer, cl jwt.Claims, key string, value int
 
 // TestOAuthClient creates a new http client handling OAuth automatically.
 // Returned is the new HTTP Client, JWKS URI and a close function.
-func TestOAuthClient(subject string) (*http.Client, string, func()) {
+func TestOAuthClient(subject string, audience string, issuer string) (*http.Client, string, func()) {
 	jwksuri, close := testHelperJWKSProvider(TestPrivRSAKey1ID, TestPrivRSAKey2ID)
 
 	ctx := context.Background()
 
+	var audiences jwt.Audience
+
+	if audience != "" {
+		audiences = append(audiences, audience)
+	}
+
 	authClaim := jwt.Claims{
+		Issuer:    issuer,
 		Subject:   subject,
+		Audience:  audiences,
 		NotBefore: jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
 	}
 

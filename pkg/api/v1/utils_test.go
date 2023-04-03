@@ -171,18 +171,18 @@ func newTestServer(t *testing.T, config *testServerConfig) (*testServer, error) 
 
 	e := echox.NewServer()
 
-	var auth *jwtauth.Auth
-
 	if config.auth != nil {
-		auth, err = jwtauth.NewAuth(*config.auth)
+		auth, err := jwtauth.NewAuth(*config.auth)
 		if err != nil {
 			ts.Close()
 
 			return nil, err
 		}
+
+		e.Use(auth.Middleware())
 	}
 
-	router := NewRouter(db, logger, auth, newPubSubClient(t, logger, ts.nats.ClientURL()))
+	router := NewRouter(db, logger, newPubSubClient(t, logger, ts.nats.ClientURL()))
 
 	router.Routes(e)
 

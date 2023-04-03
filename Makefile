@@ -106,19 +106,19 @@ gci: | gci-diff gci-write  ## Outputs and corrects all improper go import orderi
 $(TOOLS_DIR):
 	mkdir -p $(TOOLS_DIR)
 
-$(TOOLS_DIR)/cockroach: $(TOOLS_DIR)
+$(TOOLS_DIR)/cockroach: | $(TOOLS_DIR)
 	@echo "Downloading cockroach: $(COCKROACH_RELEASE_URL)"
 	@curl --silent --fail "$(COCKROACH_RELEASE_URL)" \
-		| tar -xz --strip-components 1 -C $< $(COCKROACH_VERSION_FILE)/cockroach
+		| tar -xz --strip-components 1 -C $(TOOLS_DIR) $(COCKROACH_VERSION_FILE)/cockroach
 
 	$@ version
 
-$(TOOLS_DIR)/gci: $(TOOLS_DIR)
+$(TOOLS_DIR)/gci: | $(TOOLS_DIR)
 	@echo "Installing $(GCI_REPO)@$(GCI_VERSION)"
 	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(GCI_REPO)@$(GCI_VERSION)
 	$@ --version
 
-$(TOOLS_DIR)/golangci-lint: $(TOOLS_DIR)
+$(TOOLS_DIR)/golangci-lint: | $(TOOLS_DIR)
 	@echo "Installing $(GOLANGCI_LINT_REPO)/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)"
 	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(GOLANGCI_LINT_REPO)/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	$@ version

@@ -147,7 +147,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 }
 
 func TestTenantsWithAuth(t *testing.T) {
-	oauthClient, jwksURI, close := jwtauth.TestOAuthClient("urn:test:user")
+	oauthClient, jwksURI, close := jwtauth.TestOAuthClient("urn:test:user", "", "")
 	defer close()
 
 	srv, err := newTestServer(t, &testServerConfig{

@@ -21,6 +21,12 @@ type AuthConfig struct {
 	// Logger defines the auth logger to use.
 	Logger *zap.Logger
 
+	// Issuer is the Auth Issuer
+	Issuer string
+
+	// Audience is the Auth Audience
+	Audience string
+
 	// JWKSURI is the full URI to a JWKS json path.
 	JWKSURI string
 
@@ -38,6 +44,9 @@ type Auth struct {
 	jwtConfig echojwt.Config
 
 	middleware echo.MiddlewareFunc
+
+	issuer   string
+	audience string
 }
 
 func (a *Auth) setup(config AuthConfig) error {
@@ -46,6 +55,9 @@ func (a *Auth) setup(config AuthConfig) error {
 	} else {
 		a.logger = zap.NewNop()
 	}
+
+	a.issuer = config.Issuer
+	a.audience = config.Audience
 
 	jwks, err := keyfunc.Get(config.JWKSURI, config.KeyFuncOptions)
 	if err != nil {
@@ -56,14 +68,24 @@ func (a *Auth) setup(config AuthConfig) error {
 
 	jwtConfig := &config.JWTConfig
 	jwtConfig.KeyFunc = jwks.Keyfunc
-	jwtConfig.SuccessHandler = a.successHandler
 
 	middleware, err := jwtConfig.ToMiddleware()
 	if err != nil {
 		return err
 	}
 
-	a.middleware = middleware
+	// intercepts the next function to run final validation.
+	a.middleware = func(next echo.HandlerFunc) echo.HandlerFunc {
+		postActions := func(c echo.Context) error {
+			if err := a.jwtHandler(c); err != nil {
+				return err
+			}
+
+			return next(c)
+		}
+
+		return middleware(postActions)
+	}
 
 	return nil
 }

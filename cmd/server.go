@@ -62,17 +62,6 @@ func serve(ctx context.Context) {
 
 	defer natsClose()
 
-	var auth *jwtauth.Auth
-
-	if jwksurl := viper.GetString("jwks.url"); jwksurl != "" {
-		auth, err = jwtauth.NewAuth(jwtauth.AuthConfig{
-			JWKSURI: jwksurl,
-		})
-		if err != nil {
-			logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
-		}
-	}
-
 	auditMiddleware, auditCloseFn, err := newAuditMiddleware(ctx)
 	if err != nil {
 		logger.Fatal("Failed to initialize audit middleware", zap.Error(err))
@@ -86,10 +75,18 @@ func serve(ctx context.Context) {
 		e.Use(auditMiddleware.Audit())
 	}
 
+	if config := jwtauth.AuthConfigFromViper(viper.GetViper()); config != nil {
+		auth, err := jwtauth.NewAuth(*config)
+		if err != nil {
+			logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
+		}
+
+		e.Use(auth.Middleware())
+	}
+
 	r := api.NewRouter(
 		db,
 		logger,
-		auth,
 		pubsub.NewClient(
 			pubsub.WithJetreamContext(js),
 			pubsub.WithLogger(logger),
