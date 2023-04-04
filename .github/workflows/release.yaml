@@ -6,8 +6,18 @@ on:
     - 'v**'
 
 jobs:
+  container-main:
+    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
+    with:
+      name: tenant-api
+      tag: ${{ github.ref_name }}
+      registry_org: ${{ github.repository_owner }}
+      dockerfile_path: Dockerfile
+      platforms: linux/amd64,linux/arm64
+
   release:
     runs-on: ubuntu-latest
+    needs: container-main
     steps:
       - uses: actions/checkout@v3
 
@@ -21,12 +31,3 @@ jobs:
           app_version: ${{  github.ref_name }}
           chart_version: ${{  github.ref_name }}
           branch: gh-pages
-
-  container-main:
-    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
-    with:
-      name: tenant-api
-      tag: ${{ github.ref_name }}
-      registry_org: ${{ github.repository_owner }}
-      dockerfile_path: Dockerfile
-      platforms: linux/amd64,linux/arm64
