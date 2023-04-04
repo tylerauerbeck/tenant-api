@@ -12,7 +12,3 @@ dependencies:
     tags:
       - bitnami-common
     version: 2.2.4
-  - name: reloader
-    condition: reloader.enabled
-    version: "v1.0.18"
-    repository: "https://stakater.github.io/stakater-charts"
