@@ -21,6 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Update values.yaml
+        uses: fjogeleit/yaml-update-action@main
+        with:
+          valueFile: 'chart/tenant-api/values.yaml'
+          propertyPath: '.image.tag'
+          value: ${{ github.ref_name }}
+          commitChange: false
+
       - name: Publish Helm charts
         uses: stefanprodan/helm-gh-pages@master
         with:
