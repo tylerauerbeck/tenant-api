@@ -4,6 +4,7 @@ import (
 	"github.com/MicahParks/keyfunc"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 )
 
@@ -69,14 +70,23 @@ func (a *Auth) setup(config AuthConfig) error {
 	jwtConfig := &config.JWTConfig
 	jwtConfig.KeyFunc = jwks.Keyfunc
 
-	middleware, err := jwtConfig.ToMiddleware()
+	mdw, err := jwtConfig.ToMiddleware()
 	if err != nil {
 		return err
 	}
 
 	// intercepts the next function to run final validation.
 	a.middleware = func(next echo.HandlerFunc) echo.HandlerFunc {
+		skipper := jwtConfig.Skipper
+		if skipper == nil {
+			skipper = middleware.DefaultSkipper
+		}
+
 		postActions := func(c echo.Context) error {
+			if skipper(c) {
+				return next(c)
+			}
+
 			if err := a.jwtHandler(c); err != nil {
 				return err
 			}
@@ -84,7 +94,7 @@ func (a *Auth) setup(config AuthConfig) error {
 			return next(c)
 		}
 
-		return middleware(postActions)
+		return mdw(postActions)
 	}
 
 	return nil

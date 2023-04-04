@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/labstack/echo/v4"
 	"github.com/metal-toolbox/auditevent/helpers"
 	"github.com/metal-toolbox/auditevent/middleware/echoaudit"
 	nats "github.com/nats-io/nats.go"
@@ -76,6 +77,10 @@ func serve(ctx context.Context) {
 	}
 
 	if config := jwtauth.AuthConfigFromViper(viper.GetViper()); config != nil {
+		config.JWTConfig.Skipper = func(c echo.Context) bool {
+			return c.Request().URL.Path == "/healthz" || c.Request().URL.Path == "/readyz"
+		}
+
 		auth, err := jwtauth.NewAuth(*config)
 		if err != nil {
 			logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
