@@ -20,6 +20,8 @@ import (
 const (
 	natsMsgSubTimeout   = 2 * time.Second
 	tenantSubjectCreate = "com.infratographer.events.tenants.create.global"
+	tenantSubjectUpdate = "com.infratographer.events.tenants.update.global"
+	tenantSubjectDelete = "com.infratographer.events.tenants.delete.global"
 	tenantBaseURN       = "urn:infratographer:tenants:"
 )
 
@@ -295,5 +297,103 @@ func TestTenantsWithAuth(t *testing.T) {
 		require.Len(t, result.Tenants, 1, "expected 1 tenant")
 		assert.Equal(t, t1aResp.Tenant.ID, result.Tenants[0].ID, "expected tenant1.a id")
 		assert.Equal(t, t1aResp.Tenant.Name, result.Tenants[0].Name, "expected tenant1.a name")
+	})
+
+	t.Run("get tenant", func(t *testing.T) {
+		var result *v1TenantResponse
+
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1Resp.Tenant.ID, nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for tenant list")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
+
+		require.NotEmpty(t, result.Tenant, "expected tenant")
+		assert.Equal(t, t1Resp.Tenant.ID, result.Tenant.ID, "expected tenant1 id")
+		assert.Equal(t, t1Resp.Tenant.Name, result.Tenant.Name, "expected tenant1 name")
+	})
+
+	t.Run("get subtenant", func(t *testing.T) {
+		var result *v1TenantResponse
+
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1aResp.Tenant.ID, nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for tenant list")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
+
+		require.NotEmpty(t, result.Tenant, "expected tenant")
+		assert.Equal(t, t1aResp.Tenant.ID, result.Tenant.ID, "expected subtenant id")
+		assert.Equal(t, t1aResp.Tenant.Name, result.Tenant.Name, "expected subtenant name")
+	})
+
+	t.Run("update tenant", func(t *testing.T) {
+		updateRequest := strings.NewReader(`{"name": "tenant1.a-updated"}`)
+
+		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPatch, "/v1/tenants/"+t1Resp.Tenant.ID, nil, updateRequest, nil)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for updating subtenant")
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
+
+		_, err = updateRequest.Seek(0, io.SeekStart)
+		assert.NoError(t, err, "no error expected for seek")
+
+		resp, err = srv.Request(http.MethodPatch, "/v1/tenants/"+t1Resp.Tenant.ID, nil, updateRequest, &t1aResp)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for updating subtenant")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
+		assert.NotEmpty(t, t1aResp.Tenant.ID, "expected tenant id")
+		assert.Equal(t, "tenant1.a-updated", t1aResp.Tenant.Name, "unexpected tenant name")
+		require.NotNil(t, t1aResp.Tenant.ParentTenantID, "expected parent tenant id to be set")
+		assert.Equal(t, t1Resp.Tenant.ID, *t1aResp.Tenant.ParentTenantID, "unexpected parent tenant id")
+
+		select {
+		case msg := <-msgChan:
+			pMsg := &pubsubx.Message{}
+			err = json.Unmarshal(msg.Data, pMsg)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tenantSubjectUpdate, msg.Subject, "expected nats subject to be tenant update subject")
+			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, pubsub.UpdateEventType, pMsg.EventType, "expected event type to be update")
+			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+			require.Empty(t, pMsg.AdditionalSubjectURNs, "unexpected additional subject urns")
+		case <-time.After(natsMsgSubTimeout):
+			t.Error("failed to receive nats message")
+		}
+	})
+
+	t.Run("delete tenant", func(t *testing.T) {
+		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodDelete, "/v1/tenants/"+t1Resp.Tenant.ID, nil, nil, nil)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for updating subtenant")
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
+
+		resp, err = srv.Request(http.MethodDelete, "/v1/tenants/"+t1Resp.Tenant.ID, nil, nil, nil)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for updating subtenant")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
+
+		select {
+		case msg := <-msgChan:
+			pMsg := &pubsubx.Message{}
+			err = json.Unmarshal(msg.Data, pMsg)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tenantSubjectDelete, msg.Subject, "expected nats subject to be tenant delete subject")
+			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, pubsub.DeleteEventType, pMsg.EventType, "expected event type to be delete")
+			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+			require.Empty(t, pMsg.AdditionalSubjectURNs, "unexpected additional subject urns")
+		case <-time.After(natsMsgSubTimeout):
+			t.Error("failed to receive nats message")
+		}
+	})
+
+	t.Run("get deleted tenant", func(t *testing.T) {
+		var result *v1TenantResponse
+
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1aResp.Tenant.ID, nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for tenant list")
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "unexpected status code returned")
 	})
 }

@@ -11,3 +11,15 @@ func (c *createTenantRequest) validate() error {
 
 	return nil
 }
+
+type updateTenantRequest struct {
+	Name *string `json:"name"`
+}
+
+func (c *updateTenantRequest) validate() error {
+	if c.Name != nil && *c.Name == "" {
+		return ErrTenantNameMissing
+	}
+
+	return nil
+}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"errors"
 
 	"github.com/labstack/echo/v4"
@@ -108,6 +109,149 @@ func (r *Router) tenantList(c echo.Context) error {
 	}
 
 	return v1TenantsResponse(c, ts, pagination)
+}
+
+func (r *Router) tenantGet(c echo.Context) error {
+	ctx, span := tracer.Start(c.Request().Context(), "tenantGet")
+	defer span.End()
+
+	var mods []qm.QueryMod
+
+	tenantID, err := parseUUID(c, "id")
+	if err != nil {
+		return v1BadRequestResponse(c, err)
+	}
+
+	mods = append(mods, models.TenantWhere.ID.EQ(tenantID))
+
+	t, err := models.Tenants(mods...).One(ctx, r.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return v1TenantNotFoundResponse(c, err)
+		}
+
+		r.logger.Error("failed to query tenants", zap.Error(err))
+
+		return v1InternalServerErrorResponse(c, err)
+	}
+
+	return v1TenantGetResponse(c, t)
+}
+
+func (r *Router) tenantUpdate(c echo.Context) error {
+	ctx, span := tracer.Start(c.Request().Context(), "tenantUpdate")
+	defer span.End()
+
+	var mods []qm.QueryMod
+
+	tenantID, err := parseUUID(c, "id")
+	if err != nil {
+		return v1BadRequestResponse(c, err)
+	}
+
+	payload := new(updateTenantRequest)
+
+	if err := c.Bind(&payload); err != nil {
+		r.logger.Error("failed to bind update tenant request", zap.Error(err))
+
+		return v1BadRequestResponse(c, err)
+	}
+
+	if err := payload.validate(); err != nil {
+		r.logger.Error("invalid update tenant request", zap.Error(err))
+
+		return v1BadRequestResponse(c, err)
+	}
+
+	mods = append(mods, models.TenantWhere.ID.EQ(tenantID))
+
+	t, err := models.Tenants(mods...).One(ctx, r.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return v1TenantNotFoundResponse(c, err)
+		}
+
+		r.logger.Error("failed to query tenants", zap.Error(err))
+
+		return v1InternalServerErrorResponse(c, err)
+	}
+
+	if payload.Name != nil {
+		t.Name = *payload.Name
+	}
+
+	if _, err := t.Update(ctx, r.db, boil.Infer()); err != nil {
+		r.logger.Error("failed to update tenant", zap.Error(err))
+
+		return v1InternalServerErrorResponse(c, err)
+	}
+
+	actor := jwtauth.Actor(c)
+
+	msg, err := pubsub.UpdateTenantMessage(
+		actor,
+		pubsub.NewTenantURN(t.ID),
+	)
+	if err != nil {
+		// TODO: add status to reconcile and requeue this
+		r.logger.Error("failed to create, update tenant message", zap.Error(err))
+	}
+
+	if err := r.pubsub.PublishUpdate(ctx, "tenants", "global", msg); err != nil {
+		// TODO: add status to reconcile and requeue this
+		r.logger.Error("failed to publish, update tenant message", zap.Error(err))
+	}
+
+	return v1TenantGetResponse(c, t)
+}
+
+func (r *Router) tenantDelete(c echo.Context) error {
+	ctx, span := tracer.Start(c.Request().Context(), "tenantDelete")
+	defer span.End()
+
+	var mods []qm.QueryMod
+
+	tenantID, err := parseUUID(c, "id")
+	if err != nil {
+		return v1BadRequestResponse(c, err)
+	}
+
+	mods = append(mods, models.TenantWhere.ID.EQ(tenantID))
+
+	t, err := models.Tenants(mods...).One(ctx, r.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return v1TenantNotFoundResponse(c, err)
+		}
+
+		r.logger.Error("failed to query tenants", zap.Error(err))
+
+		return v1InternalServerErrorResponse(c, err)
+	}
+
+	if _, err := t.Delete(ctx, r.db, false); err != nil {
+		r.logger.Error("failed to delete tenant", zap.Error(err))
+
+		return err
+	}
+
+	actor := jwtauth.Actor(c)
+
+	msg, err := pubsub.DeleteTenantMessage(
+		actor,
+		pubsub.NewTenantURN(t.ID),
+	)
+	if err != nil {
+		// TODO: add status to reconcile and requeue this
+		r.logger.Error("failed to create, delete tenant message", zap.Error(err))
+	}
+
+	if err := r.pubsub.PublishDelete(ctx, "tenants", "global", msg); err != nil {
+		// TODO: add status to reconcile and requeue this
+		r.logger.Error("failed to publish, delete tenant message", zap.Error(err))
+	}
+
+	return nil
 }
 
 func v1Tenant(t *models.Tenant) *tenant {
