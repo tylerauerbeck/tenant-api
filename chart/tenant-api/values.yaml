@@ -55,7 +55,6 @@ api:
     audience: ""
     issuer: ""
     jwks:
-      uri: ""
       remoteTimeout: 1m
 
 # -- (dict) configures metal-toolbox/audittail

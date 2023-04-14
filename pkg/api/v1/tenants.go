@@ -10,7 +10,7 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"go.infratographer.com/tenant-api/internal/models"
 	"go.infratographer.com/tenant-api/internal/pubsub"
-	"go.infratographer.com/tenant-api/pkg/jwtauth"
+	"go.infratographer.com/x/echojwtx"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -63,7 +63,7 @@ func (r *Router) tenantCreate(c echo.Context) error {
 		return v1InternalServerErrorResponse(c, err)
 	}
 
-	actor := jwtauth.Actor(c)
+	actor := echojwtx.Actor(c)
 
 	msg, err := pubsub.NewTenantMessage(
 		actor,
@@ -186,7 +186,7 @@ func (r *Router) tenantUpdate(c echo.Context) error {
 		return v1InternalServerErrorResponse(c, err)
 	}
 
-	actor := jwtauth.Actor(c)
+	actor := echojwtx.Actor(c)
 
 	msg, err := pubsub.UpdateTenantMessage(
 		actor,
@@ -235,7 +235,7 @@ func (r *Router) tenantDelete(c echo.Context) error {
 		return err
 	}
 
-	actor := jwtauth.Actor(c)
+	actor := echojwtx.Actor(c)
 
 	msg, err := pubsub.DeleteTenantMessage(
 		actor,

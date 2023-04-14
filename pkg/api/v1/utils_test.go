@@ -11,14 +11,14 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach-go/v2/testserver"
+	"github.com/labstack/echo/v4"
 	natssrv "github.com/nats-io/nats-server/v2/server"
 	nats "github.com/nats-io/nats.go"
 	"github.com/pressly/goose/v3"
 	dbm "go.infratographer.com/tenant-api/db"
 	"go.infratographer.com/tenant-api/internal/pubsub"
-	"go.infratographer.com/tenant-api/pkg/echox"
-	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.infratographer.com/x/crdbx"
+	"go.infratographer.com/x/echojwtx"
 	"go.uber.org/zap"
 )
 
@@ -100,7 +100,7 @@ func httpRequest(client *http.Client, method, uri string, headers http.Header, b
 
 type testServerConfig struct {
 	client *http.Client
-	auth   *jwtauth.AuthConfig
+	auth   *echojwtx.AuthConfig
 }
 
 func newTestServer(t *testing.T, config *testServerConfig) (*testServer, error) {
@@ -169,22 +169,29 @@ func newTestServer(t *testing.T, config *testServerConfig) (*testServer, error) 
 
 	ts.closeFns = append(ts.closeFns, ts.nats.Shutdown)
 
-	e := echox.NewServer()
+	var middleware []echo.MiddlewareFunc
+
+	e := echo.New()
 
 	if config.auth != nil {
-		auth, err := jwtauth.NewAuth(*config.auth)
+		auth, err := echojwtx.NewAuth(context.Background(), *config.auth)
 		if err != nil {
 			ts.Close()
 
 			return nil, err
 		}
 
-		e.Use(auth.Middleware())
+		middleware = append(middleware, auth.Middleware())
 	}
 
-	router := NewRouter(db, logger, newPubSubClient(t, logger, ts.nats.ClientURL()))
+	router := NewRouter(
+		db,
+		newPubSubClient(t, logger, ts.nats.ClientURL()),
+		WithLogger(logger),
+		WithMiddleware(middleware...),
+	)
 
-	router.Routes(e)
+	router.Routes(e.Group("/"))
 
 	ts.Server = httptest.NewServer(e)
 

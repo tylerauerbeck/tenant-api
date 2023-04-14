@@ -13,10 +13,11 @@ import (
 	"go.infratographer.com/tenant-api/internal/config"
 	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/tenant-api/pkg/api/v1"
-	"go.infratographer.com/tenant-api/pkg/echox"
-	"go.infratographer.com/tenant-api/pkg/jwtauth"
 	"go.infratographer.com/x/crdbx"
+	"go.infratographer.com/x/echojwtx"
+	"go.infratographer.com/x/echox"
 	"go.infratographer.com/x/otelx"
+	"go.infratographer.com/x/versionx"
 	"go.infratographer.com/x/viperx"
 	"go.uber.org/zap"
 )
@@ -38,7 +39,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	echox.MustViperFlags(viper.GetViper(), serveCmd.Flags(), APIDefaultListen)
-	jwtauth.MustViperFlags(viper.GetViper(), serveCmd.Flags())
+	echojwtx.MustViperFlags(viper.GetViper(), serveCmd.Flags())
 
 	// audit log path
 	serveCmd.Flags().String("audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
@@ -68,41 +69,50 @@ func serve(ctx context.Context) {
 		logger.Fatal("Failed to initialize audit middleware", zap.Error(err))
 	}
 
-	e := echox.NewServer()
+	srv := echox.NewServer(logger, echox.Config{
+		Listen: config.AppConfig.Server.Listen,
+	}, versionx.BuildDetails())
+
+	var middleware []echo.MiddlewareFunc
 
 	if auditMiddleware != nil {
 		defer auditCloseFn() //nolint:errcheck // Not needed to check returned error.
 
-		e.Use(auditMiddleware.Audit())
+		middleware = append(middleware, auditMiddleware.Audit())
 	}
 
-	if config := jwtauth.AuthConfigFromViper(viper.GetViper()); config != nil {
+	if config, err := echojwtx.AuthConfigFromViper(viper.GetViper()); err != nil {
+		logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
+	} else if config != nil {
 		config.JWTConfig.Skipper = func(c echo.Context) bool {
 			return c.Request().URL.Path == "/healthz" || c.Request().URL.Path == "/readyz"
 		}
 
-		auth, err := jwtauth.NewAuth(*config)
+		auth, err := echojwtx.NewAuth(ctx, *config)
 		if err != nil {
 			logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
 		}
 
-		e.Use(auth.Middleware())
+		middleware = append(middleware, auth.Middleware())
 	}
 
 	r := api.NewRouter(
 		db,
-		logger,
 		pubsub.NewClient(
 			pubsub.WithJetreamContext(js),
 			pubsub.WithLogger(logger),
 			pubsub.WithStreamName(viper.GetString("nats.stream-name")),
 			pubsub.WithSubjectPrefix(viper.GetString("nats.subject-prefix")),
 		),
+		api.WithLogger(logger),
+		api.WithMiddleware(middleware...),
 	)
 
-	r.Routes(e)
+	srv.AddHandler(r).AddReadinessCheck("database", r.DatabaseCheck)
 
-	e.Logger.Fatal(e.Start(config.AppConfig.Server.Listen))
+	if err := srv.Run(); err != nil {
+		logger.Fatal("failed to run server", zap.Error(err))
+	}
 }
 
 func newJetstreamConnection() (nats.JetStreamContext, func(), error) {

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.infratographer.com/tenant-api/internal/pubsub"
-	"go.infratographer.com/tenant-api/pkg/jwtauth"
+	"go.infratographer.com/x/echojwtx"
 	"go.infratographer.com/x/pubsubx"
 )
 
@@ -149,13 +149,13 @@ func TestTenantsWithoutAuth(t *testing.T) {
 }
 
 func TestTenantsWithAuth(t *testing.T) {
-	oauthClient, jwksURI, close := jwtauth.TestOAuthClient("urn:test:user", "", "")
+	oauthClient, issuer, close := echojwtx.TestOAuthClient("urn:test:user", "")
 	defer close()
 
 	srv, err := newTestServer(t, &testServerConfig{
 		client: oauthClient,
-		auth: &jwtauth.AuthConfig{
-			JWKSURI: jwksURI,
+		auth: &echojwtx.AuthConfig{
+			Issuer: issuer,
 		},
 	})
 	defer srv.close()

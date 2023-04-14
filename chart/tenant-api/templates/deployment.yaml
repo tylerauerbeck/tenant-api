@@ -83,10 +83,6 @@ spec:
             - name: TENANTAPI_OIDC_ISSUER
               value: "{{ . }}"
           {{- end }}
-          {{- with .Values.api.oidc.jwks.uri }}
-            - name: TENANTAPI_OIDC_JWKS_URI
-              value: "{{ . }}"
-          {{- end }}
           {{- with .Values.api.oidc.jwks.remoteTimeout }}
             - name: TENANTAPI_OIDC_JWKS_REMOTE_TIMEOUT
               value: "{{ . }}"

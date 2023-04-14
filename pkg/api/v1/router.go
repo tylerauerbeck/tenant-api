@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 
@@ -18,22 +19,25 @@ var tracer = otel.Tracer("go.infratographer.com/tenant-api/pkg/api/v1")
 
 // Router provides a router for the API
 type Router struct {
-	db     *sql.DB
-	logger *zap.Logger
-	pubsub *pubsub.Client
+	db         *sql.DB
+	logger     *zap.Logger
+	pubsub     *pubsub.Client
+	middleware []echo.MiddlewareFunc
 }
 
 // NewRouter creates a new APIv1 router.
-func NewRouter(db *sql.DB, l *zap.Logger, ps *pubsub.Client) *Router {
-	return &Router{
+func NewRouter(db *sql.DB, ps *pubsub.Client, options ...RouterOption) *Router {
+	router := &Router{
 		db:     db,
-		logger: l.Named("api"),
+		logger: zap.NewNop(),
 		pubsub: ps,
 	}
-}
 
-func errorHandler(err error, c echo.Context) {
-	c.Echo().DefaultHTTPErrorHandler(err, c)
+	for _, opt := range options {
+		opt(router)
+	}
+
+	return router
 }
 
 // Ensures request header Content-Type is set to application/json if not already defined.
@@ -49,21 +53,12 @@ func defaultRequestType(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 // Routes will add the routes for this API version to a router group
-func (r *Router) Routes(e *echo.Echo) {
-	// authenticate a request, not included the v1 group since this has custom
-	// authentication as it's accepting external auth
-	e.HideBanner = true
-
-	e.HTTPErrorHandler = errorHandler
-
-	e.Use(defaultRequestType)
-
-	// Health endpoints
-	e.GET("/healthz", r.livenessCheck)
-	e.GET("/readyz", r.readinessCheck)
-
+func (r *Router) Routes(e *echo.Group) {
 	v1 := e.Group(apiVersion)
 	{
+		v1.Use(defaultRequestType)
+		v1.Use(r.middleware...)
+
 		v1.GET("/", r.apiVersion)
 
 		v1.GET("/tenants", r.tenantList)
@@ -83,29 +78,13 @@ func (r *Router) Routes(e *echo.Echo) {
 	}
 }
 
-// livenessCheck ensures that the server is up and responding
-func (r *Router) livenessCheck(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{
-		"status": "UP",
-	})
-}
-
-// readinessCheck ensures that the server is up and that we are able to process
-// requests. currently this only checks the database connection.
-func (r *Router) readinessCheck(c echo.Context) error {
-	ctx := c.Request().Context()
-
+// DatabaseCheck ensure the database connection is established.
+func (r *Router) DatabaseCheck(ctx context.Context) error {
 	if err := r.db.PingContext(ctx); err != nil {
-		r.logger.Error("readiness check db ping failed", zap.Error(err))
-
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{
-			"status": "DOWN",
-		})
+		return err
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"status": "UP",
-	})
+	return nil
 }
 
 // apiVersion responds with the current api version.
