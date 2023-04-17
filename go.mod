@@ -9,7 +9,7 @@ require (
 	github.com/friendsofgo/errors v0.9.2
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo/v4 v4.10.2
-	github.com/lib/pq v1.10.7
+	github.com/lib/pq v1.10.8
 	github.com/metal-toolbox/auditevent v0.7.0
 	github.com/nats-io/nats-server/v2 v2.9.15
 	github.com/nats-io/nats.go v1.25.0
