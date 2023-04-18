@@ -27,8 +27,9 @@ func v1TenantCreatedResponse(c echo.Context, t *models.Tenant) error {
 
 func v1TenantsResponse(c echo.Context, ts []*models.Tenant, pagination PaginationParams) error {
 	return c.JSON(http.StatusOK, v1TenantSliceResponse{
-		Tenants: v1TenantSlice(ts),
-		Version: apiVersion,
+		Tenants:          v1TenantSlice(ts),
+		Version:          apiVersion,
+		PaginationParams: pagination,
 	})
 }
 

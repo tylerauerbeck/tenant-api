@@ -75,6 +75,10 @@ func (p *PaginationParams) offset() int {
 	return (p.page() - 1) * p.limitUsed()
 }
 
+func (p *PaginationParams) getPageOffset() int {
+	return p.limitUsed() * (p.page() - 1)
+}
+
 func (p *PaginationParams) queryMods() []qm.QueryMod {
 	var mods []qm.QueryMod
 

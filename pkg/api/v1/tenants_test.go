@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -396,4 +397,130 @@ func TestTenantsWithAuth(t *testing.T) {
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "unexpected status code returned")
 	})
+
+	tree := buildTree(t, srv)
+
+	t.Run("list all parents", func(t *testing.T) {
+		target := tree.tenantsByName["t1a1b"]
+
+		var result *v1TenantSliceResponse
+
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+target.ID+"/parents", nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for tenant list")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
+
+		require.Len(t, result.Tenants, len(tree.parents[target.ID]), "unexpected tenants returned")
+
+		for _, tenant := range tree.parents[target.ID] {
+			assert.Contains(t, tenantIDs(result.Tenants), tenant.ID, "expected tenant to be in response")
+		}
+
+		assert.NotContains(t, tenantIDs(result.Tenants), tree.tenantsByName["t2"].ID, "unexpected tree in result")
+	})
+
+	t.Run("list parents until", func(t *testing.T) {
+		target := tree.tenantsByName["t1a1b"]
+		targetParent := tree.tenantsByName["t1a"]
+
+		var result *v1TenantSliceResponse
+
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+target.ID+"/parents/"+targetParent.ID, nil, nil, &result)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for tenant list")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
+
+		require.Len(t, result.Tenants, len(tree.parents[target.ID][1:]), "unexpected tenants returned")
+
+		for _, tenant := range tree.parents[target.ID][1:] {
+			assert.Contains(t, tenantIDs(result.Tenants), tenant.ID, "expected tenant to be in response")
+		}
+
+		assert.NotContains(t, tenantIDs(result.Tenants), tree.tenantsByName["t1"].ID, "unexpected parent in result")
+		assert.NotContains(t, tenantIDs(result.Tenants), tree.tenantsByName["t2"].ID, "unexpected tree in result")
+	})
+}
+
+func tenantIDs(tenants []*tenant) []string {
+	ids := make([]string, len(tenants))
+
+	for i, t := range tenants {
+		ids[i] = t.ID
+	}
+
+	return ids
+}
+
+type hierarchy struct {
+	tenantsByID   map[string]*tenant
+	tenantsByPath map[string]*tenant
+	tenantsByName map[string]*tenant
+	descendants   map[string][]*tenant
+	parents       map[string][]*tenant
+}
+
+// buildTree builds a test tree hierarchy of tenants.
+func buildTree(t *testing.T, srv *testServer) *hierarchy {
+	t.Helper()
+
+	treeDef := []string{
+		"t1",
+		"t1.t1a",
+		"t1.t1a.t1a1",
+		"t1.t1a.t1a1.t1a1a",
+		"t1.t1a.t1a1.t1a1b",
+		"t1.t1b",
+		"t1.t1b.t1b1",
+		"t1.t1b.t1b1.t1b1a",
+		"t2",
+		"t2.t2a",
+	}
+
+	tree := &hierarchy{
+		tenantsByID:   make(map[string]*tenant),
+		tenantsByPath: make(map[string]*tenant),
+		tenantsByName: make(map[string]*tenant),
+		descendants:   make(map[string][]*tenant),
+		parents:       make(map[string][]*tenant),
+	}
+
+	for _, path := range treeDef {
+		createPath := "/v1/tenants"
+
+		parts := strings.Split(path, ".")
+
+		tenantName := parts[len(parts)-1]
+
+		createRequest := fmt.Sprintf(`{"name": "%s"}`, tenantName)
+
+		if len(parts) > 1 {
+			createPath += "/" + tree.tenantsByName[parts[len(parts)-2]].ID + "/tenants"
+		}
+
+		var tenantResp *v1TenantResponse
+
+		resp, err := srv.Request(http.MethodPost, createPath, nil, strings.NewReader(createRequest), &tenantResp)
+		resp.Body.Close() //nolint:errcheck // Not needed
+		require.NoError(t, err, "no error expected for tenant creation")
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
+
+		require.NotNil(t, tenantResp, "expected tenant to not be nil")
+
+		tenant := tenantResp.Tenant
+
+		tree.tenantsByID[tenant.ID] = tenant
+		tree.tenantsByPath[path] = tenant
+		tree.tenantsByName[tenant.Name] = tenant
+
+		for i := 1; i < len(parts)-1; i++ {
+			partID := tree.tenantsByName[parts[i-1]].ID
+			tree.descendants[partID] = append(tree.descendants[partID], tenant)
+		}
+
+		for i := 0; i <= len(parts)-2; i++ {
+			tree.parents[tenant.ID] = append(tree.parents[tenant.ID], tree.tenantsByName[parts[i]])
+		}
+	}
+
+	return tree
 }

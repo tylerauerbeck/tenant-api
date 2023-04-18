@@ -70,6 +70,9 @@ func (r *Router) Routes(e *echo.Group) {
 
 		v1.GET("/tenants/:id/tenants", r.tenantList)
 		v1.POST("/tenants/:id/tenants", r.tenantCreate)
+
+		v1.GET("/tenants/:id/parents", r.tenantParentsList)
+		v1.GET("/tenants/:id/parents/:parent_id", r.tenantParentsList)
 	}
 
 	_, err := r.pubsub.AddStream()

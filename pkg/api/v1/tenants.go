@@ -254,6 +254,116 @@ func (r *Router) tenantDelete(c echo.Context) error {
 	return nil
 }
 
+const (
+	parentsQuery = `
+		WITH RECURSIVE get_parents AS (
+			SELECT id, name, parent_tenant_id, created_at, updated_at, deleted_at
+			FROM tenants
+			WHERE
+				id = $1
+				AND deleted_at IS NULL
+
+			UNION (
+				SELECT t.id, t.name, t.parent_tenant_id, t.created_at, t.updated_at, t.deleted_at
+				FROM tenants t
+				INNER JOIN get_parents gp ON t.id = gp.parent_tenant_id
+				WHERE t.deleted_at IS NULL
+				ORDER BY created_at
+			)
+		)
+		SELECT id, name, parent_tenant_id, created_at, updated_at, deleted_at
+		FROM get_parents
+	`
+	parentsUntilQuery = `
+		WITH RECURSIVE get_parents AS (
+			SELECT id, name, parent_tenant_id, created_at, updated_at, deleted_at
+			FROM tenants
+			WHERE
+				id = $1
+				AND deleted_at IS NULL
+
+			UNION (
+				SELECT t.id, t.name, t.parent_tenant_id, t.created_at, t.updated_at, t.deleted_at
+				FROM tenants t
+				INNER JOIN get_parents gp ON t.id = gp.parent_tenant_id
+				WHERE
+					gp.id != $2
+					AND t.deleted_at IS NULL
+				ORDER BY created_at
+			)
+		)
+		SELECT id, name, parent_tenant_id, created_at, updated_at, deleted_at
+		FROM get_parents
+	`
+)
+
+func (r *Router) tenantParentsList(c echo.Context) error {
+	ctx, span := tracer.Start(c.Request().Context(), "tenantParentsList")
+	defer span.End()
+
+	pagination := parsePagination(c)
+
+	tenantID, err := parseUUID(c, "id")
+	if err != nil {
+		return v1BadRequestResponse(c, err)
+	}
+
+	parentID, err := parseUUID(c, "parent_id")
+	if err != nil && !errors.Is(err, ErrUUIDNotFound) {
+		return v1BadRequestResponse(c, err)
+	}
+
+	var rows *sql.Rows
+
+	if parentID == "" {
+		rows, err = r.db.QueryContext(ctx, parentsQuery, tenantID)
+	} else {
+		rows, err = r.db.QueryContext(ctx, parentsUntilQuery, tenantID, parentID)
+	}
+
+	if err != nil {
+		r.logger.Error("failed to query tenant parents", zap.Error(err))
+
+		return v1InternalServerErrorResponse(c, err)
+	}
+
+	var tenants []*models.Tenant
+
+	for rows.Next() {
+		tenant := new(models.Tenant)
+
+		err = rows.Scan(
+			&tenant.ID,
+			&tenant.Name,
+			&tenant.ParentTenantID,
+			&tenant.CreatedAt,
+			&tenant.UpdatedAt,
+			&tenant.DeletedAt,
+		)
+
+		if err != nil {
+			return v1InternalServerErrorResponse(c, err)
+		}
+
+		tenants = append(tenants, tenant)
+	}
+
+	if len(tenants) == 0 {
+		return v1TenantNotFoundResponse(c, nil)
+	}
+
+	if pagination.getPageOffset()+1 >= len(tenants) {
+		return v1TenantsResponse(c, nil, pagination)
+	}
+
+	limit := pagination.getPageOffset() + 1 + pagination.limitUsed()
+	if limit > len(tenants) {
+		limit = len(tenants)
+	}
+
+	return v1TenantsResponse(c, tenants[pagination.getPageOffset()+1:limit], pagination)
+}
+
 func v1Tenant(t *models.Tenant) *tenant {
 	return &tenant{
 		ID:             t.ID,
