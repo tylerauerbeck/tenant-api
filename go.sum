@@ -620,8 +620,8 @@ go.etcd.io/etcd/api/v3 v3.5.4/go.mod h1:5GB2vv4A4AOn3yk7MftYGHkUfGtDHnEraIjym4dY
 go.etcd.io/etcd/client/pkg/v3 v3.5.4/go.mod h1:IJHfcCEKxYu1Os13ZdwCwIUTUVGYTSAM3YSwc9/Ac1g=
 go.etcd.io/etcd/client/v2 v2.305.4/go.mod h1:Ud+VUwIi9/uQHOMA+4ekToJ12lTxlv0zB/+DHwTGEbU=
 go.etcd.io/etcd/client/v3 v3.5.4/go.mod h1:ZaRkVgBZC+L+dLCjTcF1hRXpgZXQPOvnA/Ak/gq3kiY=
-go.infratographer.com/x v0.0.6 h1:b+IeDact60+5qPBCYKZe/TJMXOAM1FlapMt7tGmw/Tk=
-go.infratographer.com/x v0.0.6/go.mod h1:yRNFRLtURkukh4Wbd1SpNgCzhsUMaxV544rFYc3g0ZU=
+go.infratographer.com/x v0.0.7 h1:eUdA1zZpV/odXWjsNlsuYR+s++zf6G//CG7SPFXglDQ=
+go.infratographer.com/x v0.0.7/go.mod h1:yRNFRLtURkukh4Wbd1SpNgCzhsUMaxV544rFYc3g0ZU=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
 go.opencensus.io v0.22.0/go.mod h1:+kGneAE2xo2IficOXnaByMWTGM9T73dGwxeWcUqIpI8=
 go.opencensus.io v0.22.2/go.mod h1:yxeiOL68Rb0Xd1ddK5vPZ/oVn4vY4Ynel7k9FzqtOIw=

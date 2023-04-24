@@ -69,9 +69,10 @@ func serve(ctx context.Context) {
 		logger.Fatal("Failed to initialize audit middleware", zap.Error(err))
 	}
 
-	srv := echox.NewServer(logger, echox.Config{
-		Listen: config.AppConfig.Server.Listen,
-	}, versionx.BuildDetails())
+	srv, err := echox.NewServer(logger, echox.ConfigFromViper(viper.GetViper()), versionx.BuildDetails())
+	if err != nil {
+		logger.Fatal("failed to initialize new server", zap.Error(err))
+	}
 
 	var middleware []echo.MiddlewareFunc
 
@@ -84,9 +85,7 @@ func serve(ctx context.Context) {
 	if config, err := echojwtx.AuthConfigFromViper(viper.GetViper()); err != nil {
 		logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
 	} else if config != nil {
-		config.JWTConfig.Skipper = func(c echo.Context) bool {
-			return c.Request().URL.Path == "/healthz" || c.Request().URL.Path == "/readyz"
-		}
+		config.JWTConfig.Skipper = echox.SkipDefaultEndpoints
 
 		auth, err := echojwtx.NewAuth(ctx, *config)
 		if err != nil {

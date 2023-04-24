@@ -57,6 +57,15 @@ api:
     jwks:
       remoteTimeout: 1m
 
+  shutdownGracePeriod: 5s
+
+  trustedProxies: []
+  # - "1.2.3.4"
+  # - "1.2.3.4/32"
+  # - "1.2.3.0/24"
+
+
+
 # -- (dict) configures metal-toolbox/audittail
 audit:
   # -- (bool) toggles audittail
