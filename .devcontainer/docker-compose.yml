@@ -61,21 +61,9 @@ services:
       - audit:/app-audit
     restart: unless-stopped
 
-  # Environment setup
-  create_databases:
-    image: cockroachdb/cockroach:latest-v22.1
-    restart: on-failure:5
-    command: "sql --insecure -e 'CREATE DATABASE IF NOT EXISTS tenantapi_dev;'"
-    env_file:
-      - .env
-    depends_on:
-      - crdb
-    networks:
-      - infradev
-
   # Required services (databases, etc)
   crdb:
-    image: cockroachdb/cockroach:latest-v22.1
+    image: cockroachdb/cockroach:latest-v22.2
     command: start-single-node --insecure
     restart: unless-stopped
     volumes:

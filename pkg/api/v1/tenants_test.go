@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/x/echojwtx"
+	"go.infratographer.com/x/gidx"
 	"go.infratographer.com/x/pubsubx"
 )
 
@@ -23,7 +24,6 @@ const (
 	tenantSubjectCreate = "com.infratographer.events.tenants.create.global"
 	tenantSubjectUpdate = "com.infratographer.events.tenants.update.global"
 	tenantSubjectDelete = "com.infratographer.events.tenants.delete.global"
-	tenantBaseURN       = "urn:infratographer:tenants:"
 )
 
 func TestTenantsWithoutAuth(t *testing.T) {
@@ -78,14 +78,14 @@ func TestTenantsWithoutAuth(t *testing.T) {
 
 		select {
 		case msg := <-msgChan:
-			pMsg := &pubsubx.Message{}
+			pMsg := &pubsubx.ChangeMessage{}
 			err = json.Unmarshal(msg.Data, pMsg)
 			require.NoError(t, err)
 
 			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
-			assert.Equal(t, "", pMsg.ActorURN, "expected no actor for unauthenticated client")
+			assert.Empty(t, pMsg.ActorID, "expected no actor for unauthenticated client")
 			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
-			assert.Equal(t, tenantBaseURN+t1Resp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+			assert.Equal(t, t1Resp.Tenant.ID, pMsg.SubjectID, "expected subject id to be returned tenant id")
 		case <-time.After(natsMsgSubTimeout):
 			t.Error("failed to receive nats message")
 		}
@@ -96,7 +96,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 	t.Run("new subtenant", func(t *testing.T) {
 		createRequest := strings.NewReader(`{"name": "tenant1.a"}`)
 
-		resp, err := srv.Request(http.MethodPost, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, createRequest, &t1aResp)
+		resp, err := srv.Request(http.MethodPost, "/v1/tenants/"+string(t1Resp.Tenant.ID)+"/tenants", nil, createRequest, &t1aResp)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating subtenant")
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
@@ -107,16 +107,16 @@ func TestTenantsWithoutAuth(t *testing.T) {
 
 		select {
 		case msg := <-msgChan:
-			pMsg := &pubsubx.Message{}
+			pMsg := &pubsubx.ChangeMessage{}
 			err = json.Unmarshal(msg.Data, pMsg)
 			assert.NoError(t, err)
 
 			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
-			assert.Equal(t, "", pMsg.ActorURN, "expected no actor for unauthenticated client")
+			assert.Empty(t, pMsg.ActorID, "expected no actor for unauthenticated client")
 			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
-			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
-			require.NotEmpty(t, pMsg.AdditionalSubjectURNs, "expected additional subject urns")
-			assert.Contains(t, pMsg.AdditionalSubjectURNs, tenantBaseURN+t1Resp.Tenant.ID, "expected parent urn in additional subject urns")
+			assert.Equal(t, t1aResp.Tenant.ID, pMsg.SubjectID, "expected subject id to be returned tenant id")
+			require.NotEmpty(t, pMsg.AdditionalSubjectIDs, "expected additional subject ids")
+			assert.Contains(t, pMsg.AdditionalSubjectIDs, t1Resp.Tenant.ID, "expected parent id in additional subject ids")
 		case <-time.After(natsMsgSubTimeout):
 			t.Error("failed to receive nats message")
 		}
@@ -138,7 +138,7 @@ func TestTenantsWithoutAuth(t *testing.T) {
 	t.Run("list subtenants", func(t *testing.T) {
 		var result *v1TenantSliceResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(t1Resp.Tenant.ID)+"/tenants", nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -150,7 +150,9 @@ func TestTenantsWithoutAuth(t *testing.T) {
 }
 
 func TestTenantsWithAuth(t *testing.T) {
-	oauthClient, issuer, close := echojwtx.TestOAuthClient("urn:test:user", "")
+	testActorID := gidx.MustNewID(TenantIDPrefix)
+
+	oauthClient, issuer, close := echojwtx.TestOAuthClient(string(testActorID), "")
 	defer close()
 
 	srv, err := newTestServer(t, &testServerConfig{
@@ -222,14 +224,14 @@ func TestTenantsWithAuth(t *testing.T) {
 
 		select {
 		case msg := <-msgChan:
-			pMsg := &pubsubx.Message{}
+			pMsg := &pubsubx.ChangeMessage{}
 			err = json.Unmarshal(msg.Data, pMsg)
 			require.NoError(t, err)
 
 			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
-			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, testActorID, pMsg.ActorID, "expected auth subject for actor id")
 			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
-			assert.Equal(t, tenantBaseURN+t1Resp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
+			assert.Equal(t, t1Resp.Tenant.ID, pMsg.SubjectID, "expected subject id to be returned tenant id")
 		case <-time.After(natsMsgSubTimeout):
 			t.Error("failed to receive nats message")
 		}
@@ -240,7 +242,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	t.Run("new subtenant", func(t *testing.T) {
 		createRequest := strings.NewReader(`{"name": "tenant1.a"}`)
 
-		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPost, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, createRequest, nil)
+		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPost, "/v1/tenants/"+string(t1Resp.Tenant.ID)+"/tenants", nil, createRequest, nil)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating subtenant")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
@@ -248,7 +250,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		_, err = createRequest.Seek(0, io.SeekStart)
 		assert.NoError(t, err, "no error expected for seek")
 
-		resp, err = srv.Request(http.MethodPost, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, createRequest, &t1aResp)
+		resp, err = srv.Request(http.MethodPost, "/v1/tenants/"+string(t1Resp.Tenant.ID)+"/tenants", nil, createRequest, &t1aResp)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for creating subtenant")
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "unexpected status code returned")
@@ -259,16 +261,16 @@ func TestTenantsWithAuth(t *testing.T) {
 
 		select {
 		case msg := <-msgChan:
-			pMsg := &pubsubx.Message{}
+			pMsg := &pubsubx.ChangeMessage{}
 			err = json.Unmarshal(msg.Data, pMsg)
 			assert.NoError(t, err)
 
 			assert.Equal(t, tenantSubjectCreate, msg.Subject, "expected nats subject to be tenant create subject")
-			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, testActorID, pMsg.ActorID, "expected auth subject for actor id")
 			assert.Equal(t, pubsub.CreateEventType, pMsg.EventType, "expected event type to be create")
-			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
-			require.NotEmpty(t, pMsg.AdditionalSubjectURNs, "expected additional subject urns")
-			assert.Contains(t, pMsg.AdditionalSubjectURNs, tenantBaseURN+t1Resp.Tenant.ID, "expected parent urn in additional subject urns")
+			assert.Equal(t, t1aResp.Tenant.ID, pMsg.SubjectID, "expected subject id to be returned tenant id")
+			require.NotEmpty(t, pMsg.AdditionalSubjectIDs, "expected additional subject ids")
+			assert.Contains(t, pMsg.AdditionalSubjectIDs, t1Resp.Tenant.ID, "expected parent id in additional subject ids")
 		case <-time.After(natsMsgSubTimeout):
 			t.Error("failed to receive nats message")
 		}
@@ -290,7 +292,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	t.Run("list subtenants", func(t *testing.T) {
 		var result *v1TenantSliceResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1Resp.Tenant.ID+"/tenants", nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(t1Resp.Tenant.ID)+"/tenants", nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -303,7 +305,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	t.Run("get tenant", func(t *testing.T) {
 		var result *v1TenantResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1Resp.Tenant.ID, nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(t1Resp.Tenant.ID), nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -316,7 +318,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	t.Run("get subtenant", func(t *testing.T) {
 		var result *v1TenantResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1aResp.Tenant.ID, nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(t1aResp.Tenant.ID), nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -329,7 +331,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	t.Run("update tenant", func(t *testing.T) {
 		updateRequest := strings.NewReader(`{"name": "tenant1.a-updated"}`)
 
-		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPatch, "/v1/tenants/"+t1Resp.Tenant.ID, nil, updateRequest, nil)
+		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodPatch, "/v1/tenants/"+string(t1Resp.Tenant.ID), nil, updateRequest, nil)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for updating subtenant")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
@@ -337,7 +339,7 @@ func TestTenantsWithAuth(t *testing.T) {
 		_, err = updateRequest.Seek(0, io.SeekStart)
 		assert.NoError(t, err, "no error expected for seek")
 
-		resp, err = srv.Request(http.MethodPatch, "/v1/tenants/"+t1Resp.Tenant.ID, nil, updateRequest, &t1aResp)
+		resp, err = srv.Request(http.MethodPatch, "/v1/tenants/"+string(t1Resp.Tenant.ID), nil, updateRequest, &t1aResp)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for updating subtenant")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -348,42 +350,42 @@ func TestTenantsWithAuth(t *testing.T) {
 
 		select {
 		case msg := <-msgChan:
-			pMsg := &pubsubx.Message{}
+			pMsg := &pubsubx.ChangeMessage{}
 			err = json.Unmarshal(msg.Data, pMsg)
 			assert.NoError(t, err)
 
 			assert.Equal(t, tenantSubjectUpdate, msg.Subject, "expected nats subject to be tenant update subject")
-			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, testActorID, pMsg.ActorID, "expected auth subject for actor id")
 			assert.Equal(t, pubsub.UpdateEventType, pMsg.EventType, "expected event type to be update")
-			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
-			require.Empty(t, pMsg.AdditionalSubjectURNs, "unexpected additional subject urns")
+			assert.Equal(t, t1aResp.Tenant.ID, pMsg.SubjectID, "expected subject id to be returned tenant id")
+			require.Empty(t, pMsg.AdditionalSubjectIDs, "unexpected additional subject ids")
 		case <-time.After(natsMsgSubTimeout):
 			t.Error("failed to receive nats message")
 		}
 	})
 
 	t.Run("delete tenant", func(t *testing.T) {
-		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodDelete, "/v1/tenants/"+t1Resp.Tenant.ID, nil, nil, nil)
+		resp, err := srv.RequestWithClient(http.DefaultClient, http.MethodDelete, "/v1/tenants/"+string(t1Resp.Tenant.ID), nil, nil, nil)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for updating subtenant")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code returned")
 
-		resp, err = srv.Request(http.MethodDelete, "/v1/tenants/"+t1Resp.Tenant.ID, nil, nil, nil)
+		resp, err = srv.Request(http.MethodDelete, "/v1/tenants/"+string(t1Resp.Tenant.ID), nil, nil, nil)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for updating subtenant")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
 
 		select {
 		case msg := <-msgChan:
-			pMsg := &pubsubx.Message{}
+			pMsg := &pubsubx.ChangeMessage{}
 			err = json.Unmarshal(msg.Data, pMsg)
 			assert.NoError(t, err)
 
 			assert.Equal(t, tenantSubjectDelete, msg.Subject, "expected nats subject to be tenant delete subject")
-			assert.Equal(t, "urn:test:user", pMsg.ActorURN, "expected auth subject for actor urn")
+			assert.Equal(t, testActorID, pMsg.ActorID, "expected auth subject for actor id")
 			assert.Equal(t, pubsub.DeleteEventType, pMsg.EventType, "expected event type to be delete")
-			assert.Equal(t, tenantBaseURN+t1aResp.Tenant.ID, pMsg.SubjectURN, "expected subject urn to be returned tenant urn")
-			require.Empty(t, pMsg.AdditionalSubjectURNs, "unexpected additional subject urns")
+			assert.Equal(t, t1aResp.Tenant.ID, pMsg.SubjectID, "expected subject id to be returned tenant id")
+			require.Empty(t, pMsg.AdditionalSubjectIDs, "unexpected additional subject ids")
 		case <-time.After(natsMsgSubTimeout):
 			t.Error("failed to receive nats message")
 		}
@@ -392,7 +394,7 @@ func TestTenantsWithAuth(t *testing.T) {
 	t.Run("get deleted tenant", func(t *testing.T) {
 		var result *v1TenantResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+t1aResp.Tenant.ID, nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(t1aResp.Tenant.ID), nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "unexpected status code returned")
@@ -405,7 +407,7 @@ func TestTenantsWithAuth(t *testing.T) {
 
 		var result *v1TenantSliceResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+target.ID+"/parents", nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(target.ID)+"/parents", nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -425,7 +427,7 @@ func TestTenantsWithAuth(t *testing.T) {
 
 		var result *v1TenantSliceResponse
 
-		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+target.ID+"/parents/"+targetParent.ID, nil, nil, &result)
+		resp, err := srv.Request(http.MethodGet, "/v1/tenants/"+string(target.ID)+"/parents/"+string(targetParent.ID), nil, nil, &result)
 		resp.Body.Close() //nolint:errcheck // Not needed
 		require.NoError(t, err, "no error expected for tenant list")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status code returned")
@@ -441,8 +443,8 @@ func TestTenantsWithAuth(t *testing.T) {
 	})
 }
 
-func tenantIDs(tenants []*tenant) []string {
-	ids := make([]string, len(tenants))
+func tenantIDs(tenants []*tenant) []gidx.PrefixedID {
+	ids := make([]gidx.PrefixedID, len(tenants))
 
 	for i, t := range tenants {
 		ids[i] = t.ID
@@ -452,11 +454,11 @@ func tenantIDs(tenants []*tenant) []string {
 }
 
 type hierarchy struct {
-	tenantsByID   map[string]*tenant
+	tenantsByID   map[gidx.PrefixedID]*tenant
 	tenantsByPath map[string]*tenant
 	tenantsByName map[string]*tenant
-	descendants   map[string][]*tenant
-	parents       map[string][]*tenant
+	descendants   map[gidx.PrefixedID][]*tenant
+	parents       map[gidx.PrefixedID][]*tenant
 }
 
 // buildTree builds a test tree hierarchy of tenants.
@@ -477,11 +479,11 @@ func buildTree(t *testing.T, srv *testServer) *hierarchy {
 	}
 
 	tree := &hierarchy{
-		tenantsByID:   make(map[string]*tenant),
+		tenantsByID:   make(map[gidx.PrefixedID]*tenant),
 		tenantsByPath: make(map[string]*tenant),
 		tenantsByName: make(map[string]*tenant),
-		descendants:   make(map[string][]*tenant),
-		parents:       make(map[string][]*tenant),
+		descendants:   make(map[gidx.PrefixedID][]*tenant),
+		parents:       make(map[gidx.PrefixedID][]*tenant),
 	}
 
 	for _, path := range treeDef {
@@ -494,7 +496,7 @@ func buildTree(t *testing.T, srv *testServer) *hierarchy {
 		createRequest := fmt.Sprintf(`{"name": "%s"}`, tenantName)
 
 		if len(parts) > 1 {
-			createPath += "/" + tree.tenantsByName[parts[len(parts)-2]].ID + "/tenants"
+			createPath += "/" + string(tree.tenantsByName[parts[len(parts)-2]].ID) + "/tenants"
 		}
 
 		var tenantResp *v1TenantResponse

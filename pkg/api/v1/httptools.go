@@ -1,24 +1,26 @@
 package api
 
 import (
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"go.infratographer.com/x/gidx"
 )
 
-// parseUUID parses and validates a UUID from the request path if the path param is found
-func parseUUID(c echo.Context, path string) (string, error) {
+// parseID parses and validates a GID from the request path if the path param is found
+func parseID(c echo.Context, path string) (gidx.PrefixedID, error) {
 	var id string
 	if err := echo.PathParamsBinder(c).String(path, &id).BindError(); err != nil {
 		return "", err
 	}
 
 	if id != "" {
-		if _, err := uuid.Parse(id); err != nil {
-			return "", ErrInvalidUUID
+		gid, err := gidx.Parse(id)
+
+		if err != nil {
+			return "", ErrInvalidID
 		}
 
-		return id, nil
+		return gid, nil
 	}
 
-	return "", ErrUUIDNotFound
+	return "", ErrIDNotFound
 }

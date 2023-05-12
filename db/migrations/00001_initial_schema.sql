@@ -2,9 +2,9 @@
 -- +goose StatementBegin
 
 CREATE TABLE tenants (
-  id UUID PRIMARY KEY NOT NULL DEFAULT gen_random_uuid(),
-  name STRING NOT NULL,
-  parent_tenant_id UUID NULL REFERENCES tenants(id),
+  id VARCHAR(29) PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  parent_tenant_id VARCHAR(29) NULL REFERENCES tenants(id),
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
   deleted_at TIMESTAMPTZ NULL

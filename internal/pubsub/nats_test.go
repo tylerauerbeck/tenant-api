@@ -3,10 +3,11 @@ package pubsub
 import (
 	"testing"
 
-	"github.com/google/uuid"
 	natssrv "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.infratographer.com/x/gidx"
 	"go.uber.org/zap"
 )
 
@@ -26,12 +27,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestClient_AddStream(t *testing.T) {
-	u, err := uuid.NewUUID()
-	if err != nil {
-		t.Error(err)
-	}
+	id, err := gidx.NewID("testing")
 
-	tStream := u.String()
+	require.NoError(t, err, "expected no error creating new id")
 
 	nc, err := nats.Connect(natsSrv.ClientURL())
 	if err != nil {
@@ -48,8 +46,8 @@ func TestClient_AddStream(t *testing.T) {
 	c1 := NewClient(
 		WithJetreamContext(js),
 		WithLogger(zap.NewNop()),
-		WithStreamName("nats-test-"+tStream),
-		WithSubjectPrefix("com.infratographer."+tStream),
+		WithStreamName("nats-test-"+string(id)),
+		WithSubjectPrefix("com.infratographer."+string(id)),
 	)
 
 	out, err := c1.AddStream()
@@ -61,7 +59,7 @@ func TestClient_AddStream(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	assert.Equal(t, "nats-test-"+tStream, out.Config.Name)
+	assert.Equal(t, "nats-test-"+string(id), out.Config.Name)
 	assert.Equal(t, nats.FileStorage, out.Config.Storage)
 	assert.Equal(t, nats.LimitsPolicy, out.Config.Retention)
 	assert.Equal(t, nats.DiscardNew, out.Config.Discard)
@@ -74,7 +72,7 @@ func TestClient_AddStream(t *testing.T) {
 		WithJetreamContext(js),
 		WithLogger(zap.NewNop()),
 		WithStreamName("nats-test-overlaps"),
-		WithSubjectPrefix("com.infratographer."+tStream),
+		WithSubjectPrefix("com.infratographer."+string(id)),
 	)
 
 	// AddStream should error since subjects overlap

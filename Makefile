@@ -20,7 +20,7 @@ ifneq ($(filter arm%,$(UNAME_P)),)
 endif
 
 # Tool Versions
-COCKROACH_VERSION = v22.1.15
+COCKROACH_VERSION = v22.2.8
 
 OS_VERSION = $(OS)
 ifeq ($(OS),darwin)
@@ -38,6 +38,12 @@ GCI_VERSION = v0.10.1
 
 GOLANGCI_LINT_REPO = github.com/golangci/golangci-lint
 GOLANGCI_LINT_VERSION = v1.51.2
+
+SQLBOILER_REPO = github.com/volatiletech/sqlboiler/v4
+SQLBOILER_VERSION = v4.14.2
+
+SQLBOILER_CRDB_REPO = github.com/infratographer/sqlboiler-crdb/v4
+SQLBOILER_CRDB_VERSION = latest
 
 # go files to be checked
 GO_FILES=$(shell git ls-files '*.go')
@@ -58,22 +64,38 @@ ci: | dev-database golint test coverage  ## Setup dev database and run tests.
 dev-database: | vendor $(TOOLS_DIR)/cockroach  ## Initializes dev database "${DEV_DB}"
 	@$(TOOLS_DIR)/cockroach sql -e "drop database if exists ${DEV_DB}"
 	@$(TOOLS_DIR)/cockroach sql -e "create database ${DEV_DB}"
-	@TENANTAPI_DB_URI="${DEV_URI}" go run main.go migrate up
+	@TENANTAPI_CRDB_URI="${DEV_URI}" go run main.go migrate up
+
+.PHONY: models sqlboiler-models
+models: | dev-database sqlboiler-models  ## Regenerate models.
+
+sqlboiler-models: | $(TOOLS_DIR)/sqlboiler $(TOOLS_DIR)/sqlboiler-crdb
+	@echo -- Generating models...
+	@PATH="$(ROOT_DIR)/$(TOOLS_DIR):$$PATH" \
+		$(TOOLS_DIR)/sqlboiler crdb \
+			--add-soft-deletes \
+			--config sqlboiler.toml \
+			--wipe \
+			--no-tests
+	@go mod tidy
 
 .PHONY: test
-test: | $(TOOLS_DIR)/cockroach  ## Runs unit tests.
+test: | models unit-test  ## Rebuild models and run unit tests.
+
+.PHONY: unit-test
+unit-test: | $(TOOLS_DIR)/cockroach  ## Runs unit tests.
 	@echo Running unit tests...
-	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+	@PATH="$(ROOT_DIR)/$(TOOLS_DIR):$$PATH" \
 		go test -timeout 30s -cover -short ./...
 
 .PHONY: coverage
 coverage: | $(TOOLS_DIR)/cockroach  ## Generates a test coverage report.
 	@echo Generating coverage report...
-	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+	@PATH="$(ROOT_DIR)/$(TOOLS_DIR):$$PATH" \
 		go test -timeout 30s ./... -coverprofile=coverage.out -covermode=atomic
-	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+	@PATH="$(ROOT_DIR)/$(TOOLS_DIR):$$PATH" \
 		go tool cover -func=coverage.out
-	@PATH=$$PATH:$(ROOT_DIR)/$(TOOLS_DIR) \
+	@PATH="$(ROOT_DIR)/$(TOOLS_DIR):$$PATH" \
 		go tool cover -html=coverage.out
 
 .PHONY: lint
@@ -123,3 +145,13 @@ $(TOOLS_DIR)/golangci-lint: | $(TOOLS_DIR)
 	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(GOLANGCI_LINT_REPO)/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	$@ version
 	$@ linters
+
+$(TOOLS_DIR)/sqlboiler: | $(TOOLS_DIR)
+	@echo "Installing $(SQLBOILER_REPO)@$(SQLBOILER_VERSION)"
+	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(SQLBOILER_REPO)@$(SQLBOILER_VERSION)
+	$@ --version
+
+$(TOOLS_DIR)/sqlboiler-crdb: | $(TOOLS_DIR)
+	@echo "Installing $(SQLBOILER_CRDB_REPO)@$(SQLBOILER_CRDB_VERSION)"
+	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(SQLBOILER_CRDB_REPO)@$(SQLBOILER_CRDB_VERSION)
+	$@ version

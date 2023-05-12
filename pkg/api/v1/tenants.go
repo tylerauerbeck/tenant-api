@@ -5,28 +5,40 @@ import (
 	"errors"
 
 	"github.com/labstack/echo/v4"
-	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"go.infratographer.com/tenant-api/internal/models"
 	"go.infratographer.com/tenant-api/internal/pubsub"
+	"go.infratographer.com/tenant-api/internal/x/nullx"
 	"go.infratographer.com/x/echojwtx"
+	"go.infratographer.com/x/gidx"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
+const (
+	// TenantIDService is the GID service portion of the prefix.
+	TenantIDService = "tnnt"
+
+	// TenantIDResource is the GID resource portion of the prefix.
+	TenantIDResource = "ten"
+
+	// TenantIDPrefix is the full prefix for a Tenant GID.
+	TenantIDPrefix = TenantIDService + TenantIDResource
+)
+
 func (r *Router) tenantCreate(c echo.Context) error {
-	tenantID, err := parseUUID(c, "id")
-	if err != nil && !errors.Is(err, ErrUUIDNotFound) {
-		r.logger.Error("invalid tenant uuid", zap.Error(err))
+	tenantID, err := parseID(c, "id")
+	if err != nil && !errors.Is(err, ErrIDNotFound) {
+		r.logger.Error("invalid tenant id", zap.Error(err))
 
 		return v1BadRequestResponse(c, err)
 	}
 
 	traceOpts := []trace.SpanStartOption{}
 	if tenantID != "" {
-		traceOpts = append(traceOpts, trace.WithAttributes(attribute.String("tenant-id", tenantID)))
+		traceOpts = append(traceOpts, trace.WithAttributes(attribute.String("tenant-id", string(tenantID))))
 	}
 
 	ctx, span := tracer.Start(c.Request().Context(), "tenantCreate", traceOpts...)
@@ -46,15 +58,23 @@ func (r *Router) tenantCreate(c echo.Context) error {
 		return v1BadRequestResponse(c, err)
 	}
 
+	id, err := gidx.NewID(TenantIDPrefix)
+	if err != nil {
+		r.logger.Error("invalid new tenant id", zap.Error(err))
+
+		return v1InternalServerErrorResponse(c, err)
+	}
+
 	t := &models.Tenant{
+		ID:   id,
 		Name: createRequest.Name,
 	}
 
-	var additionalURNs []string
+	var additionalGID []gidx.PrefixedID
 
 	if tenantID != "" {
-		t.ParentTenantID = null.StringFrom(tenantID)
-		additionalURNs = append(additionalURNs, pubsub.NewTenantURN(tenantID))
+		t.ParentTenantID = nullx.PrefixedIDFrom(tenantID)
+		additionalGID = append(additionalGID, tenantID)
 	}
 
 	if err := t.Insert(ctx, r.db, boil.Infer()); err != nil {
@@ -66,9 +86,9 @@ func (r *Router) tenantCreate(c echo.Context) error {
 	actor := echojwtx.Actor(c)
 
 	msg, err := pubsub.NewTenantMessage(
-		actor,
-		pubsub.NewTenantURN(t.ID),
-		additionalURNs...,
+		gidx.PrefixedID(actor),
+		t.ID,
+		additionalGID...,
 	)
 	if err != nil {
 		// TODO: add status to reconcile and requeue this
@@ -91,9 +111,9 @@ func (r *Router) tenantList(c echo.Context) error {
 
 	var mods []qm.QueryMod
 
-	if tenantID, err := parseUUID(c, "id"); err == nil {
-		mods = append(mods, models.TenantWhere.ParentTenantID.EQ(null.StringFrom(tenantID)))
-	} else if errors.Is(err, ErrUUIDNotFound) {
+	if tenantID, err := parseID(c, "id"); err == nil {
+		mods = append(mods, models.TenantWhere.ParentTenantID.EQ(nullx.PrefixedIDFrom(tenantID)))
+	} else if errors.Is(err, ErrIDNotFound) {
 		mods = append(mods, models.TenantWhere.ParentTenantID.IsNull())
 	} else {
 		return v1BadRequestResponse(c, err)
@@ -117,7 +137,7 @@ func (r *Router) tenantGet(c echo.Context) error {
 
 	var mods []qm.QueryMod
 
-	tenantID, err := parseUUID(c, "id")
+	tenantID, err := parseID(c, "id")
 	if err != nil {
 		return v1BadRequestResponse(c, err)
 	}
@@ -144,7 +164,7 @@ func (r *Router) tenantUpdate(c echo.Context) error {
 
 	var mods []qm.QueryMod
 
-	tenantID, err := parseUUID(c, "id")
+	tenantID, err := parseID(c, "id")
 	if err != nil {
 		return v1BadRequestResponse(c, err)
 	}
@@ -189,8 +209,8 @@ func (r *Router) tenantUpdate(c echo.Context) error {
 	actor := echojwtx.Actor(c)
 
 	msg, err := pubsub.UpdateTenantMessage(
-		actor,
-		pubsub.NewTenantURN(t.ID),
+		gidx.PrefixedID(actor),
+		t.ID,
 	)
 	if err != nil {
 		// TODO: add status to reconcile and requeue this
@@ -211,7 +231,7 @@ func (r *Router) tenantDelete(c echo.Context) error {
 
 	var mods []qm.QueryMod
 
-	tenantID, err := parseUUID(c, "id")
+	tenantID, err := parseID(c, "id")
 	if err != nil {
 		return v1BadRequestResponse(c, err)
 	}
@@ -238,8 +258,8 @@ func (r *Router) tenantDelete(c echo.Context) error {
 	actor := echojwtx.Actor(c)
 
 	msg, err := pubsub.DeleteTenantMessage(
-		actor,
-		pubsub.NewTenantURN(t.ID),
+		gidx.PrefixedID(actor),
+		t.ID,
 	)
 	if err != nil {
 		// TODO: add status to reconcile and requeue this
@@ -303,13 +323,13 @@ func (r *Router) tenantParentsList(c echo.Context) error {
 
 	pagination := parsePagination(c)
 
-	tenantID, err := parseUUID(c, "id")
+	tenantID, err := parseID(c, "id")
 	if err != nil {
 		return v1BadRequestResponse(c, err)
 	}
 
-	parentID, err := parseUUID(c, "parent_id")
-	if err != nil && !errors.Is(err, ErrUUIDNotFound) {
+	parentID, err := parseID(c, "parent_id")
+	if err != nil && !errors.Is(err, ErrIDNotFound) {
 		return v1BadRequestResponse(c, err)
 	}
 
