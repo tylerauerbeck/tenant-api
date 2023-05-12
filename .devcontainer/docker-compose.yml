@@ -43,7 +43,7 @@ services:
       - audit:/app-audit
 
   init-audit:
-    image: ghcr.io/metal-toolbox/audittail:v0.7.0
+    image: ghcr.io/metal-toolbox/audittail:v0.8.0
     command: init -f /app-audit/audit.log
     user: 1000:1000
     depends_on:
@@ -52,7 +52,7 @@ services:
       - audit:/app-audit
 
   audit:
-    image: ghcr.io/metal-toolbox/audittail:v0.7.0
+    image: ghcr.io/metal-toolbox/audittail:v0.8.0
     command: -f /app-audit/audit.log
     user: 1000:1000
     depends_on:
