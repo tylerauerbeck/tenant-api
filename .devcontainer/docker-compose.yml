@@ -17,6 +17,9 @@ services:
         NODE_VERSION: "none"
     command:
       - .devcontainer/scripts/app-entrypoint.sh
+    # uncomment along with bind volume to use SSH for dev container access
+    #ports:
+    #  - "127.0.0.1:2225:2222"
     env_file:
       - .env
       - .go.env
@@ -24,6 +27,10 @@ services:
       - ./nsc:/nsc
       - ..:/workspace:cached
       - audit:/app-audit
+      #- type: bind
+      #  source: ~/.ssh/authorized_keys
+      #  target: /home/vscode/.ssh/authorized_keys
+      #  read_only: true
     networks:
       - infradev
     depends_on:
