@@ -1,0 +1,73 @@
+query GetTenant($id: ID!) {
+  tenant(id: $id) {
+    id
+    name
+    description
+    createdAt
+    updatedAt
+    parent {
+      id
+      name
+    }
+  }
+}
+
+query GetTenantChildren($id: ID!, $orderBy: TenantOrder) {
+  tenant(id: $id) {
+    children(orderBy: $orderBy) {
+      edges {
+        node {
+          id
+          name
+          description
+        }
+      }
+    }
+  }
+}
+
+query GetTenantChildByID($id: ID!, $childID: ID!) {
+  tenant(id: $id) {
+    children(where: {id: $childID}) {
+      edges {
+        node {
+          id
+          name
+          description
+        }
+      }
+    }
+  }
+}
+
+mutation TenantCreate($input: CreateTenantInput!) {
+  tenantCreate(input: $input) {
+    tenant {
+      id
+      name
+      description
+      parent {
+        id
+      }
+    }
+  }
+}
+
+mutation TenantUpdate($id: ID!, $input: UpdateTenantInput!) {
+  tenantUpdate(id: $id, input: $input) {
+    tenant {
+      id
+      name
+      description
+      parent {
+        id
+      }
+    }
+  }
+}
+
+mutation TenantDelete($id: ID!) {
+  tenantDelete(id: $id) {
+    deletedID
+  }
+}

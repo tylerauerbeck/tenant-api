@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/nats-io/nats.go"
+	"go.infratographer.com/x/echojwtx"
 	"go.infratographer.com/x/gidx"
 	"go.infratographer.com/x/pubsubx"
 	"go.uber.org/zap"
@@ -22,62 +23,69 @@ const (
 	UpdateEventType = "update"
 )
 
-// May be a config option later
-var prefix = "com.infratographer.events"
-
-func newMessage(actorID, subjectID gidx.PrefixedID, additionalSubjectIDs ...gidx.PrefixedID) *pubsubx.ChangeMessage {
-	return &pubsubx.ChangeMessage{
-		SubjectID:            subjectID,
-		ActorID:              actorID,
-		Timestamp:            time.Now().UTC(),
-		Source:               "tenantapi",
-		AdditionalSubjectIDs: additionalSubjectIDs,
-	}
-}
-
-// PublishCreate publishes a create event
-func (c *Client) PublishCreate(ctx context.Context, actor gidx.PrefixedID, location string, data *pubsubx.ChangeMessage) error {
-	data.EventType = CreateEventType
-
-	return c.publish(ctx, CreateEventType, actor, location, data)
-}
-
-// PublishUpdate publishes an update event
-func (c *Client) PublishUpdate(ctx context.Context, actor gidx.PrefixedID, location string, data *pubsubx.ChangeMessage) error {
-	data.EventType = UpdateEventType
-
-	return c.publish(ctx, UpdateEventType, actor, location, data)
-}
-
-// PublishDelete publishes a delete event
-func (c *Client) PublishDelete(ctx context.Context, actor gidx.PrefixedID, location string, data *pubsubx.ChangeMessage) error {
-	data.EventType = DeleteEventType
-	return c.publish(ctx, DeleteEventType, actor, location, data)
-}
-
 // publish publishes an event
-func (c *Client) publish(ctx context.Context, action, actor gidx.PrefixedID, location string, data interface{}) error {
-	subject := fmt.Sprintf("%s.%s.%s.%s", prefix, actor, action, location)
+func (c *Client) publish(_ context.Context, subject string, eventType string, data interface{}) error {
+	c.logger.Debug("publishing nats message", zap.String("nats.subject", subject))
 
-	b, err := json.Marshal(data)
+	msg, err := prepareMessage(subject, data)
 	if err != nil {
-		c.logger.Debug("failed to marshal message", zap.String("nats.subject", subject), zap.Error(err))
-
 		return err
 	}
 
-	if _, err := c.js.Publish(subject, b); err != nil {
-		c.logger.Debug("failed to publish nats message", zap.String("nats.subject", subject), zap.Error(err))
+	msg.Header.Set("X-INFRA9-MSG-TYPE", eventType)
 
+	if _, err := c.js.PublishMsg(msg); err != nil {
 		return err
 	}
-
-	c.logger.Debug("published nats message", zap.String("nats.subject", subject))
 
 	return nil
 }
 
 // ChanSubscribe creates a subcription and returns messages on a channel
-func (c *Client) ChanSubscribe(ctx context.Context, sub string, ch chan *nats.Msg, stream string) (*nats.Subscription, error) {
+func (c *Client) ChanSubscribe(_ context.Context, sub string, ch chan *nats.Msg, stream string) (*nats.Subscription, error) {
 	return c.js.ChanSubscribe(sub, ch, nats.BindStream(stream))
+}
+
+// PullSubscribe creates a Subscription that can fetch messages.
+// See important note in (nats.JetStream).Subscribe(). Additionally, for an ephemeral pull consumer, the "durable" value must be
+// set to an empty string.
+func (c *Client) PullSubscribe(_ context.Context, sub string, durable string) (*nats.Subscription, error) {
+	return c.js.PullSubscribe(sub, durable)
+}
+
+// NewSubject builds a subject string based upon the provided
+func (c *Client) NewSubject(subjects ...string) string {
+	return fmt.Sprintf("%s.%s", c.prefix, strings.Join(subjects, "."))
+}
+
+func prepareMessage(subject string, data interface{}) (*nats.Msg, error) {
+	msg := nats.NewMsg(subject)
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	msg.Data = b
+
+	return msg, nil
+}
+
+// PublishChange publishes a change message
+func (c *Client) PublishChange(ctx context.Context, subject string, data pubsubx.ChangeMessage) error {
+	c.logger.Debug("publishing change message", zap.String("subject", subject))
+
+	data.Source = c.source
+	if data.ActorID == gidx.NullPrefixedID {
+		id, ok := ctx.Value(echojwtx.ActorCtxKey).(string)
+		if ok {
+			data.ActorID = gidx.PrefixedID(id)
+		} else {
+			data.ActorID = "unknown-actor"
+		}
+	}
+
+	err := c.publish(ctx, subject, "change", data)
+
+	return err
 }

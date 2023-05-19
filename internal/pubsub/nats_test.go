@@ -45,7 +45,7 @@ func TestClient_AddStream(t *testing.T) {
 
 	c1 := NewClient(
 		WithJetreamContext(js),
-		WithLogger(zap.NewNop()),
+		WithLogger(zap.NewNop().Sugar()),
 		WithStreamName("nats-test-"+string(id)),
 		WithSubjectPrefix("com.infratographer."+string(id)),
 	)
@@ -70,7 +70,7 @@ func TestClient_AddStream(t *testing.T) {
 
 	c2 := NewClient(
 		WithJetreamContext(js),
-		WithLogger(zap.NewNop()),
+		WithLogger(zap.NewNop().Sugar()),
 		WithStreamName("nats-test-overlaps"),
 		WithSubjectPrefix("com.infratographer."+string(id)),
 	)

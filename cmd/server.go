@@ -2,29 +2,33 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/labstack/echo/v4"
-	"github.com/metal-toolbox/auditevent/helpers"
-	"github.com/metal-toolbox/auditevent/middleware/echoaudit"
-	nats "github.com/nats-io/nats.go"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"go.infratographer.com/tenant-api/internal/config"
-	"go.infratographer.com/tenant-api/internal/pubsub"
-	"go.infratographer.com/tenant-api/pkg/api/v1"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/echojwtx"
 	"go.infratographer.com/x/echox"
 	"go.infratographer.com/x/otelx"
 	"go.infratographer.com/x/versionx"
-	"go.infratographer.com/x/viperx"
 	"go.uber.org/zap"
+
+	"go.infratographer.com/tenant-api/internal/config"
+	ent "go.infratographer.com/tenant-api/internal/ent/generated"
+	"go.infratographer.com/tenant-api/internal/graphapi"
+	"go.infratographer.com/tenant-api/internal/pubsub"
 )
 
+// APIDefaultListen defines the default listening address for the tenant-api.
+const APIDefaultListen = ":7902"
+
 var (
-	// APIDefaultListen defines the default listening address for the tenant-api.
-	APIDefaultListen = ":7601"
+	enablePlayground bool
+	serveDevMode     bool
 )
 
 var serveCmd = &cobra.Command{
@@ -41,20 +45,19 @@ func init() {
 	echox.MustViperFlags(viper.GetViper(), serveCmd.Flags(), APIDefaultListen)
 	echojwtx.MustViperFlags(viper.GetViper(), serveCmd.Flags())
 
-	// audit log path
-	serveCmd.Flags().String("audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
-	viperx.MustBindFlag(viper.GetViper(), "audit.log.path", serveCmd.Flags().Lookup("audit-log-path"))
+	// only available as a CLI arg because it shouldn't be something that could accidentially end up in a config file or env var
+	serveCmd.Flags().BoolVar(&serveDevMode, "dev", false, "dev mode: enables playground, disables all auth checks, sets CORS to allow all, pretty logging, etc.")
+	serveCmd.Flags().BoolVar(&enablePlayground, "playground", false, "enable the graph playground")
 }
 
 func serve(ctx context.Context) {
-	err := otelx.InitTracer(config.AppConfig.Tracing, appName, logger.Sugar())
-	if err != nil {
-		logger.Fatal("unable to initialize tracing system", zap.Error(err))
-	}
-
-	db, err := crdbx.NewDB(config.AppConfig.CRDB, config.AppConfig.Tracing.Enabled)
-	if err != nil {
-		logger.Fatal("unable to initialize crdb client", zap.Error(err))
+	if serveDevMode {
+		enablePlayground = true
+		config.AppConfig.Logging.Debug = true
+		config.AppConfig.Logging.Pretty = true
+		config.AppConfig.Server.WithMiddleware(middleware.CORS())
+		// this is a hack, echojwt needs to be updated to go into AppConfig
+		viper.Set("oidc.enabled", false)
 	}
 
 	js, natsClose, err := newJetstreamConnection()
@@ -64,23 +67,44 @@ func serve(ctx context.Context) {
 
 	defer natsClose()
 
-	auditMiddleware, auditCloseFn, err := newAuditMiddleware(ctx)
+	pubsubClient := pubsub.NewClient(pubsub.WithJetreamContext(js),
+		pubsub.WithLogger(logger),
+		pubsub.WithStreamName(viper.GetString("nats.stream-name")),
+		pubsub.WithSubjectPrefix("com.infratographer"),
+		pubsub.WithSource("tenant-api"),
+	)
+
+	err = otelx.InitTracer(config.AppConfig.Tracing, appName, logger)
 	if err != nil {
-		logger.Fatal("Failed to initialize audit middleware", zap.Error(err))
+		logger.Fatal("unable to initialize tracing system", zap.Error(err))
 	}
 
-	srv, err := echox.NewServer(logger, echox.ConfigFromViper(viper.GetViper()), versionx.BuildDetails())
+	db, err := crdbx.NewDB(config.AppConfig.CRDB, config.AppConfig.Tracing.Enabled)
+	if err != nil {
+		logger.Fatal("unable to initialize crdb client", zap.Error(err))
+	}
+
+	defer db.Close()
+
+	entDB := entsql.OpenDB(dialect.Postgres, db)
+
+	cOpts := []ent.Option{ent.Driver(entDB), ent.PubsubClient(pubsubClient)}
+
+	if config.AppConfig.Logging.Debug {
+		cOpts = append(cOpts,
+			ent.Log(logger.Named("ent").Debugln),
+			ent.Debug(),
+		)
+	}
+
+	client := ent.NewClient(cOpts...)
+
+	srv, err := echox.NewServer(logger.Desugar(), echox.ConfigFromViper(viper.GetViper()), versionx.BuildDetails())
 	if err != nil {
 		logger.Fatal("failed to initialize new server", zap.Error(err))
 	}
 
 	var middleware []echo.MiddlewareFunc
-
-	if auditMiddleware != nil {
-		defer auditCloseFn() //nolint:errcheck // Not needed to check returned error.
-
-		middleware = append(middleware, auditMiddleware.Audit())
-	}
 
 	if config, err := echojwtx.AuthConfigFromViper(viper.GetViper()); err != nil {
 		logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
@@ -95,19 +119,13 @@ func serve(ctx context.Context) {
 		middleware = append(middleware, auth.Middleware())
 	}
 
-	r := api.NewRouter(
-		db,
-		pubsub.NewClient(
-			pubsub.WithJetreamContext(js),
-			pubsub.WithLogger(logger),
-			pubsub.WithStreamName(viper.GetString("nats.stream-name")),
-			pubsub.WithSubjectPrefix(viper.GetString("nats.subject-prefix")),
-		),
-		api.WithLogger(logger),
-		api.WithMiddleware(middleware...),
-	)
+	r := graphapi.NewResolver(client, logger.Named("resolvers"))
+	handler := r.Handler(enablePlayground, middleware)
 
-	srv.AddHandler(r).AddReadinessCheck("database", r.DatabaseCheck)
+	srv.AddHandler(handler)
+
+	// TODO: we should have a database check
+	// srv.AddReadinessCheck("database", r.DatabaseCheck)
 
 	if err := srv.Run(); err != nil {
 		logger.Fatal("failed to run server", zap.Error(err))
@@ -136,22 +154,4 @@ func newJetstreamConnection() (nats.JetStreamContext, func(), error) {
 	}
 
 	return js, nc.Close, nil
-}
-
-func newAuditMiddleware(ctx context.Context) (*echoaudit.Middleware, func() error, error) {
-	auditFile := viper.GetString("audit.log.path")
-	if auditFile == "" {
-		logger.Warn("audit log path not provied, logging disabled.")
-
-		return nil, nil, nil
-	}
-
-	auditLogPath := viper.GetViper().GetString("audit.log.path")
-
-	fd, err := helpers.OpenAuditLogFileUntilSuccessWithContext(ctx, auditLogPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open audit log file: %w", err)
-	}
-
-	return echoaudit.NewJSONMiddleware("tenant-api", fd), fd.Close, nil
 }

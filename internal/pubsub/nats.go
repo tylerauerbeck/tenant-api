@@ -9,9 +9,11 @@ import (
 
 // Client is an event bus client with some configuration
 type Client struct {
-	js             nats.JetStreamContext
-	logger         *zap.Logger
-	prefix, stream string
+	js     nats.JetStreamContext
+	logger *zap.Logger
+	prefix string
+	stream string
+	source string
 }
 
 // Option is a functional configuration option for governor eventing
@@ -44,6 +46,13 @@ func WithStreamName(s string) Option {
 	}
 }
 
+// WithSource sets the source for events published with this client
+func WithSource(s string) Option {
+	return func(c *Client) {
+		c.source = s
+	}
+}
+
 // WithSubjectPrefix sets the nats subject prefix
 func WithSubjectPrefix(p string) Option {
 	return func(c *Client) {
@@ -52,9 +61,9 @@ func WithSubjectPrefix(p string) Option {
 }
 
 // WithLogger sets the client logger
-func WithLogger(l *zap.Logger) Option {
+func WithLogger(l *zap.SugaredLogger) Option {
 	return func(c *Client) {
-		c.logger = l
+		c.logger = l.Desugar()
 	}
 }
 

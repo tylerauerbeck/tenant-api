@@ -78,10 +78,6 @@ spec:
             - name: TENANTAPI_NATS_CREDS_FILE
               value: "{{ .Values.api.events.credsPath }}"
           {{- end }}
-          {{- with .Values.audit.enabled }}
-            - name: TENANTAPI_AUDIT_LOG_PATH
-              value: "/data/audit/audit.log"
-          {{- end }}
           {{- if .Values.api.oidc.enabled }}
           {{- with .Values.api.oidc.audience }}
             - name: TENANTAPI_OIDC_AUDIENCE
@@ -132,31 +128,8 @@ spec:
               mountPath: "/dbcerts"
               readOnly: true
             {{- end }}
-            {{- if .Values.audit.enabled }}
-            - name: audit-logs
-              mountPath: /data/audit
-            {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
-      {{- if .Values.audit.enabled }}
-      # This is the audit container
-        - name: {{ template "common.names.fullname" . }}-audit
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          args:
-            - -f
-            - /app-audit/audit.log
-          image: "{{ .Values.audit.image.registry }}/{{ .Values.audit.image.repository }}:{{ .Values.audit.image.tag | default .Chart.AppVersion }}"
-          volumeMounts:
-            - name: audit-logs
-              mountPath: /app-audit
-          {{- with .Values.audit.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- end }}
       {{- with .Values.api.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -179,8 +152,4 @@ spec:
         - name: dbcerts
           secret:
             secretName: "{{ .Values.api.db.certSecret }}"
-        {{- end }}
-        {{- if .Values.audit.enabled }}
-        - name: audit-logs
-          emptyDir: {}
         {{- end }}

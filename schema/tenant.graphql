@@ -1,0 +1,72 @@
+directive @prefixedID(prefix: String!) on OBJECT
+directive @infratographerRoles(hasRoles: Boolean!, hasParentRoles: Boolean!) on OBJECT
+
+interface ResourceOwner {
+  id: ID!
+}
+
+interface MetadataNode {
+  id: ID!
+}
+
+extend type Query {
+  """
+  Lookup a tenant by ID.
+  """
+  tenant(
+    """
+    The ID of the tenant.
+    """
+    id: ID!
+  ): Tenant!
+}
+
+extend type Mutation {
+  """
+  Create a tenant.
+  """
+  tenantCreate(
+    input: CreateTenantInput!
+  ): TenantCreatePayload!
+   """
+  Update a tenant.
+  """
+  tenantUpdate(
+    id: ID!
+    input: UpdateTenantInput!
+  ): TenantUpdatePayload!
+  """
+  Delete a tenant.
+  """
+  tenantDelete(id: ID!): TenantDeletePayload!
+}
+
+"""
+Return response from tenantCreate.
+"""
+type TenantCreatePayload {
+  """
+  The created tenant.
+  """
+  tenant: Tenant!
+}
+
+"""
+Return response from tenantUpdate.
+"""
+type TenantUpdatePayload {
+  """
+  The updated tenant.
+  """
+  tenant: Tenant!
+}
+
+"""
+Return response from tenantDelete.
+"""
+type TenantDeletePayload {
+  """
+  The ID of the deleted tenant.
+  """
+  deletedID: ID!
+}

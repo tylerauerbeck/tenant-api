@@ -3,6 +3,7 @@ package pubsub
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -20,6 +21,11 @@ const (
 func StartNatsServer() (*natssrv.Server, error) {
 	const maxControlLine = 2048
 
+	tmpdir, err := os.MkdirTemp(os.TempDir(), "tenant-nats")
+	if err != nil {
+		return nil, fmt.Errorf("failed making tmp dir for nats storage: %w", err)
+	}
+
 	s, err := natssrv.NewServer(&natssrv.Options{
 		Host:           "127.0.0.1",
 		Debug:          false,
@@ -30,6 +36,7 @@ func StartNatsServer() (*natssrv.Server, error) {
 		NoSigs:         true,
 		MaxControlLine: maxControlLine,
 		JetStream:      true,
+		StoreDir:       tmpdir,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("building nats server: %w", err)

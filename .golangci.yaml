@@ -1,10 +1,16 @@
 run:
   build-tags:
     - testtools
+  skip-files:
+    - internal/ent/generated/*
+    - internal/graphql/gen_*
   skip-dirs:
-    - internal/models
+    # Exclude generated ent code
+    - internal/ent/generated
 
 linters-settings:
+  goimports:
+    local-prefixes: go.infratographer.com/tenant-api
   gofumpt:
     extra-rules: true
 
@@ -19,24 +25,24 @@ linters:
     - typecheck
     - unused
 
+    # Currently breaks with generated code
+    # - bodyclose
+    # - noctx
+
     # additional linters
-    - bodyclose
     - gocritic
     - gocyclo
     - goerr113
     - gofmt
-    # - gofumpt
     - goimports
     - gomnd
     - govet
     - misspell
-    - noctx
     - revive
     - stylecheck
     - whitespace
     - wsl
 
-    # - bod
 issues:
   exclude:
     # Default excludes from `golangci-lint run --help` with EXC0002 removed

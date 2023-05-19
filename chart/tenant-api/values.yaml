@@ -31,7 +31,7 @@ ingress:
 
 api:
   replicas: 1
-  listenPort: 7601
+  listenPort: 7902
   extraLabels: {}
   extraAnnotations: {}
   extraEnvVars: {}
@@ -64,35 +64,6 @@ api:
   # - "1.2.3.4/32"
   # - "1.2.3.0/24"
 
-
-
-# -- (dict) configures metal-toolbox/audittail
-audit:
-  # -- (bool) toggles audittail
-  enabled: true
-  # -- (dict) Infomation about the audittail image
-  image:
-    registry: ghcr.io
-    repository: metal-toolbox/audittail
-    tag: v0.8.0
-    pullPolicy: IfNotPresent
-  # -- (dict) Resources for the audittail container
-  resources:
-    limits:
-      cpu: 500m
-      memory: 1Gi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-  init:
-    # -- (dict) Resources for the audittail init container
-    resources:
-      limits:
-        cpu: 100m
-        memory: 128Mi
-      requests:
-        cpu: 100m
-        memory: 128Mi
 
 serviceMonitor:
   enabled: false

@@ -1,13 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	dbm "go.infratographer.com/tenant-api/db"
-	"go.infratographer.com/tenant-api/internal/config"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/goosex"
 	"go.infratographer.com/x/loggingx"
@@ -15,13 +14,16 @@ import (
 	"go.infratographer.com/x/versionx"
 	"go.infratographer.com/x/viperx"
 	"go.uber.org/zap"
+
+	dbm "go.infratographer.com/tenant-api/db"
+	"go.infratographer.com/tenant-api/internal/config"
 )
 
 const appName = "tenant-api"
 
 var (
 	cfgFile string
-	logger  *zap.Logger
+	logger  *zap.SugaredLogger
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -61,7 +63,7 @@ func init() {
 	loggingx.MustViperFlags(viper.GetViper(), rootCmd.PersistentFlags())
 
 	// Register version command
-	versionx.RegisterCobraCommand(rootCmd, func() { versionx.PrintVersion(logger.Sugar()) })
+	versionx.RegisterCobraCommand(rootCmd, func() { versionx.PrintVersion(logger) })
 
 	// OTEL Flags
 	otelx.MustViperFlags(viper.GetViper(), rootCmd.Flags())
@@ -72,7 +74,7 @@ func init() {
 	// Add migrate command
 	goosex.RegisterCobraCommand(rootCmd, func() {
 		goosex.SetBaseFS(dbm.Migrations)
-		goosex.SetLogger(logger.Sugar())
+		goosex.SetLogger(logger)
 		goosex.SetDBURI(config.AppConfig.CRDB.GetURI())
 	})
 }
@@ -93,19 +95,27 @@ func initConfig() {
 
 	viper.AutomaticEnv() // read in environment variables that match
 
+	setupAppConfig()
+
+	// setupLogging()
+	logger = loggingx.InitLogger(appName, config.AppConfig.Logging)
+
 	// If a config file is found, read it in.
 	err := viper.ReadInConfig()
-
-	logger = loggingx.InitLogger(appName, config.AppConfig.Logging).Desugar()
-
 	if err == nil {
-		logger.Info("using config file",
-			zap.String("file", viper.ConfigFileUsed()),
+		logger.Infow("using config file",
+			"file", viper.ConfigFileUsed(),
 		)
 	}
+}
 
-	err = viper.Unmarshal(&config.AppConfig)
+// setupAppConfig loads our config.AppConfig struct with the values bound by
+// viper. Then, anywhere we need these values, we can just return to AppConfig
+// instead of performing viper.GetString(...), viper.GetBool(...), etc.
+func setupAppConfig() {
+	err := viper.Unmarshal(&config.AppConfig)
 	if err != nil {
-		logger.Fatal("unable to decode app config", zap.Error(err))
+		fmt.Printf("unable to decode app config: %s", err)
+		os.Exit(1)
 	}
 }
