@@ -23,15 +23,14 @@ import (
 	"entgo.io/ent/entc"
 	"entgo.io/ent/entc/gen"
 	"go.infratographer.com/x/entx"
-
-	"go.infratographer.com/tenant-api/internal/pubsub"
+	"go.infratographer.com/x/events"
 )
 
 func main() {
 	xExt, err := entx.NewExtension(
 		entx.WithFederation(),
 		entx.WithJSONScalar(),
-		entx.WithPubsubHooks(),
+		entx.WithEventHooks(),
 	)
 	if err != nil {
 		log.Fatalf("creating entx extension: %v", err)
@@ -58,7 +57,7 @@ func main() {
 		entc.TemplateDir("./internal/ent/templates"),
 		entc.FeatureNames("intercept"),
 		entc.Dependency(
-			entc.DependencyType(&pubsub.Client{}),
+			entc.DependencyType(&events.Publisher{}),
 		),
 	}
 

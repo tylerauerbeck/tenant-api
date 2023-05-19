@@ -38,7 +38,7 @@ func TestTenantQueryByID(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.TestName, func(t *testing.T) {
-			resp, err := graphTestClient(EntClient).GetTenant(ctx, tt.ID)
+			resp, err := graphTestClient(testTools.entClient).GetTenant(ctx, tt.ID)
 
 			if tt.errorMsg != "" {
 				assert.Error(t, err)
@@ -130,7 +130,7 @@ func TestTenantChildrenSorting(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.TestName, func(t *testing.T) {
-			resp, err := graphTestClient(EntClient).GetTenantChildren(ctx, tt.TenantID, tt.OrderBy)
+			resp, err := graphTestClient(testTools.entClient).GetTenantChildren(ctx, tt.TenantID, tt.OrderBy)
 
 			if tt.errorMsg != "" {
 				assert.Error(t, err)
@@ -192,7 +192,7 @@ func TestTenantChildrenWhereFiltering(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.TestName, func(t *testing.T) {
-			resp, err := graphTestClient(EntClient).GetTenantChildByID(ctx, tt.TenantID, tt.ChildID)
+			resp, err := graphTestClient(testTools.entClient).GetTenantChildByID(ctx, tt.TenantID, tt.ChildID)
 
 			if tt.errorMsg != "" {
 				assert.Error(t, err)
@@ -222,7 +222,7 @@ func TestFullTenantLifecycle(t *testing.T) {
 	name := gofakeit.DomainName()
 	description := gofakeit.Phrase()
 
-	graphC := graphTestClient(EntClient)
+	graphC := graphTestClient(testTools.entClient)
 
 	// create the Root tenant
 	rootResp, err := graphC.TenantCreate(ctx, testclient.CreateTenantInput{

@@ -13,28 +13,30 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-	natssrv "github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nats.go"
 	"go.infratographer.com/x/echojwtx"
+	"go.infratographer.com/x/events"
 	"go.infratographer.com/x/goosex"
 	"go.infratographer.com/x/testing/containersx"
+	"go.infratographer.com/x/testing/eventtools"
 	"go.uber.org/zap"
 
 	"go.infratographer.com/tenant-api/db"
 	ent "go.infratographer.com/tenant-api/internal/ent/generated"
-	"go.infratographer.com/tenant-api/internal/ent/generated/pubsubhooks"
+	"go.infratographer.com/tenant-api/internal/ent/generated/eventhooks"
 	"go.infratographer.com/tenant-api/internal/graphapi"
-	"go.infratographer.com/tenant-api/internal/pubsub"
 	"go.infratographer.com/tenant-api/internal/testclient"
 )
 
-var (
-	TestDBURI      = os.Getenv("TENANTAPI_TESTDB_URI")
-	EntClient      *ent.Client
-	DBContainer    *containersx.DBContainer
-	DBURI          string
-	NatsTestClient *pubsub.Client
-)
+var TestDBURI = os.Getenv("TENANTAPI_TESTDB_URI")
+
+var testTools struct {
+	entClient   *ent.Client
+	dbContainer *containersx.DBContainer
+
+	pubsubEntClient        *ent.Client
+	pubsubPublisherConfig  events.PublisherConfig
+	pubsubSubscriberConfig events.SubscriberConfig
+}
 
 func TestMain(m *testing.M) {
 	// setup the database if needed
@@ -62,12 +64,16 @@ func parseDBURI(ctx context.Context) (string, string, *containersx.DBContainer) 
 		switch {
 		case strings.HasPrefix(dbImage, "cockroach"), strings.HasPrefix(dbImage, "cockroachdb"), strings.HasPrefix(dbImage, "crdb"):
 			cntr, err := containersx.NewCockroachDB(ctx, dbImage)
-			errPanic("error starting db test container", err)
+			if err != nil {
+				log.Panicf("error starting db test container: %s", err.Error())
+			}
 
 			return dialect.Postgres, cntr.URI, cntr
 		case strings.HasPrefix(dbImage, "postgres"):
 			cntr, err := containersx.NewPostgresDB(ctx, dbImage)
-			errPanic("error starting db test container", err)
+			if err != nil {
+				log.Panicf("error starting db test container: %s", err.Error())
+			}
 
 			return dialect.Postgres, cntr.URI, cntr
 		default:
@@ -81,66 +87,67 @@ func parseDBURI(ctx context.Context) (string, string, *containersx.DBContainer) 
 
 func setupDB() {
 	// don't setup the datastore if we already have one
-	if EntClient != nil {
+	if testTools.entClient != nil {
 		return
 	}
 
+	var err error
+
 	ctx := context.Background()
 
-	ns, err := pubsub.StartNatsServer()
+	testTools.pubsubPublisherConfig, testTools.pubsubSubscriberConfig, err = eventtools.NewNatsServer()
 	if err != nil {
-		errPanic("failed to start nats server", err)
+		log.Panicf("error creating nats server: %s", err.Error())
 	}
 
-	natsClient, err := newNatsClient(ns)
-	if err != nil {
-		errPanic("failed to generate nats client", err)
-	}
-
-	NatsTestClient = natsClient
+	testTools.pubsubPublisherConfig.Source = "tenant-api-test"
 
 	dia, uri, cntr := parseDBURI(ctx)
 
-	c, err := ent.Open(dia, uri, ent.Debug(), ent.PubsubClient(natsClient))
+	publisher, err := events.NewPublisher(testTools.pubsubPublisherConfig)
 	if err != nil {
-		errPanic("failed terminating test db container after failing to connect to the db", cntr.Container.Terminate(ctx))
-		errPanic("failed opening connection to database:", err)
+		log.Panicf("error creating pubsubx publisher: %s", err.Error())
+	}
+
+	c, err := ent.Open(dia, uri, ent.Debug(), ent.EventsPublisher(publisher))
+	if err != nil {
+		if err := cntr.Container.Terminate(ctx); err != nil {
+			log.Printf("error terminating test db container: %s", err.Error())
+		}
+
+		log.Panicf("error opening connection to database: %s", err)
 	}
 
 	switch dia {
 	case dialect.SQLite:
 		// Run automatic migrations for SQLite
-		errPanic("failed creating db scema", c.Schema.Create(ctx))
+		if err := c.Schema.Create(ctx); err != nil {
+			log.Panicf("error creating db schema: %s", err.Error())
+		}
 	case dialect.Postgres:
 		log.Println("Running database migrations")
 		goosex.MigrateUp(uri, db.Migrations)
 	}
 
-	EntClient = c
-}
-
-func entClientWithPubsubHooks() *ent.Client {
-	newClient := EntClient
-	pubsubhooks.PubsubHooks(newClient)
-
-	return newClient
+	testTools.dbContainer = cntr
+	testTools.entClient = c
+	testTools.pubsubEntClient = c
+	eventhooks.EventHooks(testTools.pubsubEntClient)
 }
 
 func teardownDB() {
 	ctx := context.Background()
 
-	if EntClient != nil {
-		errPanic("teardown failed to close database connection", EntClient.Close())
+	if testTools.entClient != nil {
+		if err := testTools.entClient.Close(); err != nil {
+			log.Panicf("teardown failed to close database connection: %s", err.Error())
+		}
 	}
 
-	if DBContainer != nil {
-		errPanic("teardown failed to terminate test db container", DBContainer.Container.Terminate(ctx))
-	}
-}
-
-func errPanic(msg string, err error) {
-	if err != nil {
-		log.Panicf("%s err: %s", msg, err.Error())
+	if testTools.dbContainer != nil {
+		if err := testTools.dbContainer.Container.Terminate(ctx); err != nil {
+			log.Panicf("teardown failed to terminate test db container: %s", err.Error())
+		}
 	}
 }
 
@@ -164,34 +171,4 @@ func (l localRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	l.handler.ServeHTTP(w, req)
 
 	return w.Result(), nil
-}
-
-func newNatsClient(srv *natssrv.Server) (*pubsub.Client, error) {
-	nc, err := nats.Connect(srv.ClientURL())
-	if err != nil {
-		// errPanic("teardown failed to terminate test db container", DBContainer.Container.Terminate(ctx))
-		return &pubsub.Client{}, err
-	}
-
-	js, err := nc.JetStream()
-	if err != nil {
-		return &pubsub.Client{}, err
-	}
-
-	_, err = js.AddStream(&nats.StreamConfig{
-		Name:     "tenant-api",
-		Subjects: []string{"com.infratographer.events.>", "com.infratographer.changes.>"},
-	})
-	if err != nil {
-		return &pubsub.Client{}, err
-	}
-
-	client := pubsub.NewClient(pubsub.WithJetreamContext(js),
-		pubsub.WithLogger(zap.NewNop().Sugar()),
-		pubsub.WithStreamName("tenant-api"),
-		pubsub.WithSubjectPrefix("com.infratographer"),
-		pubsub.WithSource("tenant-api-test"),
-	)
-
-	return client, nil
 }

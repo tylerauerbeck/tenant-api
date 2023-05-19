@@ -2,18 +2,16 @@ package graphapi_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/brianvoe/gofakeit/v6"
-	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
+	"go.infratographer.com/x/events"
 	"go.infratographer.com/x/gidx"
-	"go.infratographer.com/x/pubsubx"
 
 	"go.infratographer.com/tenant-api/internal/testclient"
 )
@@ -24,12 +22,12 @@ func TestTenantPubsub(t *testing.T) {
 	name := gofakeit.DomainName()
 	description := gofakeit.Phrase()
 
-	// graphC := graphTestClient(EntClient)
-	graphC := graphTestClient(entClientWithPubsubHooks())
+	graphC := graphTestClient(testTools.pubsubEntClient)
 
-	psC := NatsTestClient
+	sub, err := events.NewSubscriber(testTools.pubsubSubscriberConfig)
+	require.NoError(t, err)
 
-	sub, err := psC.PullSubscribe(ctx, "com.infratographer.changes.>", "")
+	messages, err := sub.SubscribeChanges(context.Background(), ">")
 	require.NoError(t, err)
 
 	// create a root tenant and ensure fields are set
@@ -40,7 +38,7 @@ func TestTenantPubsub(t *testing.T) {
 	require.NoError(t, err)
 
 	rootTenant := rootResp.TenantCreate.Tenant
-	msg := getChangeMessage(t, sub)
+	msg := getChangeMessage(t, messages)
 	assert.Equal(t, "testing-roundtrip-actor", msg.ActorID.String())
 	assert.Equal(t, "create", msg.EventType)
 	assert.Equal(t, "tenant-api-test", msg.Source)
@@ -95,7 +93,7 @@ func TestTenantPubsub(t *testing.T) {
 
 	childTnt := childResp.TenantCreate.Tenant
 
-	msg = getChangeMessage(t, sub)
+	msg = getChangeMessage(t, messages)
 	assert.Equal(t, "testing-roundtrip-actor", msg.ActorID.String())
 	assert.Equal(t, "create", msg.EventType)
 	assert.Equal(t, "tenant-api-test", msg.Source)
@@ -150,7 +148,7 @@ func TestTenantPubsub(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, updatedTenantResp)
 
-	msg = getChangeMessage(t, sub)
+	msg = getChangeMessage(t, messages)
 	assert.Equal(t, "testing-roundtrip-actor", msg.ActorID.String())
 	assert.Equal(t, "update", msg.EventType)
 	assert.Equal(t, "tenant-api-test", msg.Source)
@@ -189,7 +187,7 @@ func TestTenantPubsub(t *testing.T) {
 	_, err = graphC.TenantDelete(ctx, childTnt.ID)
 	require.NoError(t, err)
 
-	msg = getChangeMessage(t, sub)
+	msg = getChangeMessage(t, messages)
 	assert.Equal(t, "testing-roundtrip-actor", msg.ActorID.String())
 	assert.Equal(t, "delete", msg.EventType)
 	assert.Equal(t, "tenant-api-test", msg.Source)
@@ -202,7 +200,7 @@ func TestTenantPubsub(t *testing.T) {
 	_, err = graphC.TenantDelete(ctx, rootTenant.ID)
 	require.NoError(t, err)
 
-	msg = getChangeMessage(t, sub)
+	msg = getChangeMessage(t, messages)
 	assert.Equal(t, "testing-roundtrip-actor", msg.ActorID.String())
 	assert.Equal(t, "delete", msg.EventType)
 	assert.Equal(t, "tenant-api-test", msg.Source)
@@ -212,13 +210,18 @@ func TestTenantPubsub(t *testing.T) {
 	assert.Len(t, msg.FieldChanges, 0)
 }
 
-func getChangeMessage(t *testing.T, sub *nats.Subscription) (msg pubsubx.ChangeMessage) {
-	msgs, err := sub.Fetch(1)
-	require.NoError(t, err)
-	require.Len(t, msgs, 1)
+func getChangeMessage(t *testing.T, messages <-chan *message.Message) (msg events.ChangeMessage) {
+	var err error
+	select {
+	case message := <-messages:
+		msg, err = events.UnmarshalChangeMessage(message.Payload)
+		require.NoError(t, err)
+		assert.True(t, message.Ack())
 
-	err = json.Unmarshal(msgs[0].Data, &msg)
-	require.NoError(t, err)
+		return msg
+	case <-time.After(time.Second * 2):
+		require.Fail(t, "timeout waiting for change message")
+	}
 
-	return msg
+	return
 }

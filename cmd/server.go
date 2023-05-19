@@ -7,12 +7,12 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.infratographer.com/x/crdbx"
 	"go.infratographer.com/x/echojwtx"
 	"go.infratographer.com/x/echox"
+	"go.infratographer.com/x/events"
 	"go.infratographer.com/x/otelx"
 	"go.infratographer.com/x/versionx"
 	"go.uber.org/zap"
@@ -20,7 +20,6 @@ import (
 	"go.infratographer.com/tenant-api/internal/config"
 	ent "go.infratographer.com/tenant-api/internal/ent/generated"
 	"go.infratographer.com/tenant-api/internal/graphapi"
-	"go.infratographer.com/tenant-api/internal/pubsub"
 )
 
 // APIDefaultListen defines the default listening address for the tenant-api.
@@ -44,6 +43,7 @@ func init() {
 
 	echox.MustViperFlags(viper.GetViper(), serveCmd.Flags(), APIDefaultListen)
 	echojwtx.MustViperFlags(viper.GetViper(), serveCmd.Flags())
+	events.MustViperFlagsForPublisher(viper.GetViper(), serveCmd.Flags(), appName)
 
 	// only available as a CLI arg because it shouldn't be something that could accidentially end up in a config file or env var
 	serveCmd.Flags().BoolVar(&serveDevMode, "dev", false, "dev mode: enables playground, disables all auth checks, sets CORS to allow all, pretty logging, etc.")
@@ -60,19 +60,10 @@ func serve(ctx context.Context) {
 		viper.Set("oidc.enabled", false)
 	}
 
-	js, natsClose, err := newJetstreamConnection()
+	publisher, err := events.NewPublisher(config.AppConfig.Events.Publisher)
 	if err != nil {
-		logger.Fatal("failed to create NATS jetstream connection", zap.Error(err))
+		logger.Fatal("unable to initialize event publisher", zap.Error(err))
 	}
-
-	defer natsClose()
-
-	pubsubClient := pubsub.NewClient(pubsub.WithJetreamContext(js),
-		pubsub.WithLogger(logger),
-		pubsub.WithStreamName(viper.GetString("nats.stream-name")),
-		pubsub.WithSubjectPrefix("com.infratographer"),
-		pubsub.WithSource("tenant-api"),
-	)
 
 	err = otelx.InitTracer(config.AppConfig.Tracing, appName, logger)
 	if err != nil {
@@ -88,7 +79,7 @@ func serve(ctx context.Context) {
 
 	entDB := entsql.OpenDB(dialect.Postgres, db)
 
-	cOpts := []ent.Option{ent.Driver(entDB), ent.PubsubClient(pubsubClient)}
+	cOpts := []ent.Option{ent.Driver(entDB), ent.EventsPublisher(publisher)}
 
 	if config.AppConfig.Logging.Debug {
 		cOpts = append(cOpts,
@@ -130,28 +121,4 @@ func serve(ctx context.Context) {
 	if err := srv.Run(); err != nil {
 		logger.Fatal("failed to run server", zap.Error(err))
 	}
-}
-
-func newJetstreamConnection() (nats.JetStreamContext, func(), error) {
-	opts := []nats.Option{nats.Name(appName)}
-
-	if viper.GetBool("debug") {
-		logger.Debug("enabling development settings")
-
-		opts = append(opts, nats.Token(viper.GetString("nats.token")))
-	} else {
-		opts = append(opts, nats.UserCredentials(viper.GetString("nats.creds-file")))
-	}
-
-	nc, err := nats.Connect(viper.GetString("nats.url"), opts...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	js, err := nc.JetStream()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return js, nc.Close, nil
 }

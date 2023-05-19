@@ -68,7 +68,7 @@ func (Tenant) Fields() []ent.Field {
 			Annotations(
 				entgql.Type("ID"),
 				entgql.Skip(entgql.SkipWhereInput, entgql.SkipMutationUpdateInput, entgql.SkipType),
-				entx.PubsubAdditionalSubject(),
+				entx.EventsHookAdditionalSubject(),
 			),
 	}
 }
@@ -99,7 +99,7 @@ func (Tenant) Annotations() []schema.Annotation {
 		entx.GraphKeyDirective("id"),
 		prefixIDDirective(TenantPrefix),
 		rolesDirective(true, true),
-		entx.PubsubSubjectName("tenant"),
+		entx.EventsHookSubjectName("tenant"),
 		entgql.RelayConnection(),
 		schema.Comment("Representation of a tenant."),
 		entgql.Implements("ResourceOwner"),

@@ -32,5 +32,5 @@ func (b TenantBuilder) MustNew(ctx context.Context) *ent.Tenant {
 		input.ParentID = &b.Parent.ID
 	}
 
-	return EntClient.Tenant.Create().SetInput(input).SaveX(ctx)
+	return testTools.entClient.Tenant.Create().SetInput(input).SaveX(ctx)
 }
