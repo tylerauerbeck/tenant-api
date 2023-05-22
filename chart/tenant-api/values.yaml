@@ -44,7 +44,6 @@ api:
       secretName: "events-creds"
       credsPath: "/nats/creds"
     subjects: "events"
-    queue: "tenant"
   db:
     uriSecret: tenant-api-db-uri
     certSecret: tenant-api-db-ca

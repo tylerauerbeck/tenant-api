@@ -68,14 +68,12 @@ spec:
             - name: TENANTAPI_SERVER_TRUSTED_PROXIES
               value: "{{ join " " . }}"
           {{- end }}
-            - name: TENANTAPI_NATS_URL
+            - name: TENANTAPI_EVENTS_PUBLISHER_URL
               value: "{{ .Values.api.events.connectionURL }}"
-            - name: TENANTAPI_NATS_STREAM_NAME
-              value: "{{ .Values.api.events.queue | default "tenantapi" }}"
-            - name: TENANTAPI_NATS_SUBJECT_PREFIX
+            - name: TENANTAPI_EVENTS_PUBLISHER_PREFIX
               value: "{{ .Values.api.events.subjects }}"
           {{- if .Values.api.events.auth.secretName }}
-            - name: TENANTAPI_NATS_CREDS_FILE
+            - name: TENANTAPI_EVENTS_PUBLISHER_NATS_CREDSFILE
               value: "{{ .Values.api.events.credsPath }}"
           {{- end }}
           {{- if .Values.api.oidc.enabled }}
