@@ -18,7 +18,7 @@ require (
 	github.com/stretchr/testify v1.8.3
 	github.com/vektah/gqlparser/v2 v2.5.1
 	github.com/wundergraph/graphql-go-tools v1.63.1
-	go.infratographer.com/x v0.1.2
+	go.infratographer.com/x v0.1.3
 	go.uber.org/zap v1.24.0
 )
 
@@ -44,6 +44,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/garsue/watermillzap v1.2.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
