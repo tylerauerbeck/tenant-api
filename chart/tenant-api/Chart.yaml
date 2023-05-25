@@ -11,4 +11,4 @@ dependencies:
     repository: https://charts.bitnami.com/bitnami
     tags:
       - bitnami-common
-    version: 2.2.4
+    version: 2.4.0
