@@ -37,7 +37,7 @@ spec:
       securityContext:
         {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
       {{- end }}
-      {{- if .Values.api.migrateOnInit  }}
+      {{- if .Values.api.db.migrateOnInit  }}
       initContainers:
         - name: {{ .Chart.Name }}-migrate
           envFrom:
@@ -51,7 +51,7 @@ spec:
           volumeMounts:
             {{- if .Values.api.db.certSecret }}
             - name: dbcerts
-              mountPath: "/dbcerts"
+              mountPath: "{{ .Values.api.db.certMountPath }}"
               readOnly: true
             {{- end }}
           resources:
@@ -76,7 +76,7 @@ spec:
             - name: TENANTAPI_EVENTS_PUBLISHER_NATS_CREDSFILE
               value: "{{ .Values.api.events.credsPath }}"
           {{- end }}
-          {{- if .Values.api.oidc.enabled }}
+          {{- if .Values.api.oidc.issuer }}
           {{- with .Values.api.oidc.audience }}
             - name: TENANTAPI_OIDC_AUDIENCE
               value: "{{ . }}"
@@ -85,13 +85,10 @@ spec:
             - name: TENANTAPI_OIDC_ISSUER
               value: "{{ . }}"
           {{- end }}
-          {{- with .Values.api.oidc.jwks.remoteTimeout }}
-            - name: TENANTAPI_OIDC_JWKS_REMOTE_TIMEOUT
+          {{- with .Values.api.oidc.refreshTimeout }}
+            - name: TENANTAPI_OIDC_REFRESH_TIMEOUT
               value: "{{ . }}"
           {{- end }}
-          {{- else }}
-            - name: TENANTAPI_OIDC_ENABLED
-              value: "false"
           {{- end }}
           envFrom:
             - secretRef:
@@ -123,7 +120,7 @@ spec:
             {{- end }}
             {{- if .Values.api.db.certSecret }}
             - name: dbcerts
-              mountPath: "/dbcerts"
+              mountPath: "{{ .Values.api.db.certMountPath }}"
               readOnly: true
             {{- end }}
           resources:

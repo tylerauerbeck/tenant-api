@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/infratographer/tenant-api
-  tag: "0.0.8"
+  tag: null # chart app version used by default
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -47,14 +47,13 @@ api:
   db:
     uriSecret: tenant-api-db-uri
     certSecret: tenant-api-db-ca
-  migrateOnInit: true
+    certMountPath: /dbcerts
+    migrateOnInit: true
 
   oidc:
-    enabled: false
     audience: ""
     issuer: ""
-    jwks:
-      remoteTimeout: 1m
+    refreshTimeout: 1m
 
   shutdownGracePeriod: 5s
 
