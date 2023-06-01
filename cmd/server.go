@@ -5,6 +5,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
@@ -97,12 +98,10 @@ func serve(ctx context.Context) {
 
 	var middleware []echo.MiddlewareFunc
 
-	if config, err := echojwtx.AuthConfigFromViper(viper.GetViper()); err != nil {
-		logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
-	} else if config != nil {
-		config.JWTConfig.Skipper = echox.SkipDefaultEndpoints
-
-		auth, err := echojwtx.NewAuth(ctx, *config)
+	if authConfig := config.AppConfig.OIDC; authConfig.Issuer != "" {
+		auth, err := echojwtx.NewAuth(ctx, authConfig, echojwtx.WithJWTConfig(echojwt.Config{
+			Skipper: echox.SkipDefaultEndpoints,
+		}))
 		if err != nil {
 			logger.Fatal("failed to initialize jwt authentication", zap.Error(err))
 		}

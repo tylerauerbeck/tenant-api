@@ -39,12 +39,6 @@ GCI_VERSION = v0.10.1
 GOLANGCI_LINT_REPO = github.com/golangci/golangci-lint
 GOLANGCI_LINT_VERSION = v1.51.2
 
-SQLBOILER_REPO = github.com/volatiletech/sqlboiler/v4
-SQLBOILER_VERSION = v4.14.2
-
-SQLBOILER_CRDB_REPO = github.com/infratographer/sqlboiler-crdb/v4
-SQLBOILER_CRDB_VERSION = latest
-
 # go files to be checked
 GO_FILES=$(shell git ls-files '*.go')
 
@@ -66,21 +60,14 @@ dev-database: | vendor $(TOOLS_DIR)/cockroach  ## Initializes dev database "${DE
 	@$(TOOLS_DIR)/cockroach sql -e "create database ${DEV_DB}"
 	@TENANTAPI_CRDB_URI="${DEV_URI}" go run main.go migrate up
 
-.PHONY: models sqlboiler-models
-models: | dev-database sqlboiler-models  ## Regenerate models.
-
-sqlboiler-models: | $(TOOLS_DIR)/sqlboiler $(TOOLS_DIR)/sqlboiler-crdb
-	@echo -- Generating models...
+.PHONY: generate
+generate: | dev-database  ## Regenerate files.
+	@echo Regenerating files...
 	@PATH="$(ROOT_DIR)/$(TOOLS_DIR):$$PATH" \
-		$(TOOLS_DIR)/sqlboiler crdb \
-			--add-soft-deletes \
-			--config sqlboiler.toml \
-			--wipe \
-			--no-tests
-	@go mod tidy
+		go generate ./...
 
 .PHONY: test
-test: | models unit-test  ## Rebuild models and run unit tests.
+test: | generate unit-test  ## Regenerate files and run unit tests.
 
 .PHONY: unit-test
 unit-test: | $(TOOLS_DIR)/cockroach  ## Runs unit tests.
@@ -103,7 +90,7 @@ lint: golint gci-diff  ## Runs all lint checks.
 
 golint: | vendor $(TOOLS_DIR)/golangci-lint  ## Runs Go lint checks.
 	@echo Linting Go files...
-	@$(TOOLS_DIR)/golangci-lint run
+	@$(TOOLS_DIR)/golangci-lint run --timeout=5m
 
 vendor:  ## Downloads and tidies go modules.
 	@go mod download
@@ -145,13 +132,3 @@ $(TOOLS_DIR)/golangci-lint: | $(TOOLS_DIR)
 	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(GOLANGCI_LINT_REPO)/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	$@ version
 	$@ linters
-
-$(TOOLS_DIR)/sqlboiler: | $(TOOLS_DIR)
-	@echo "Installing $(SQLBOILER_REPO)@$(SQLBOILER_VERSION)"
-	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(SQLBOILER_REPO)@$(SQLBOILER_VERSION)
-	$@ --version
-
-$(TOOLS_DIR)/sqlboiler-crdb: | $(TOOLS_DIR)
-	@echo "Installing $(SQLBOILER_CRDB_REPO)@$(SQLBOILER_CRDB_VERSION)"
-	@GOBIN=$(ROOT_DIR)/$(TOOLS_DIR) go install $(SQLBOILER_CRDB_REPO)@$(SQLBOILER_CRDB_VERSION)
-	$@ version
