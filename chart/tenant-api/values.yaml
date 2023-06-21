@@ -39,11 +39,14 @@ api:
   podSecurityContext: {}
   securityContext: {}
   events:
-    connectionURL: "my-events-cluster.example.com:4222"
-    auth:
-      secretName: "events-creds"
-      credsPath: "/nats/creds"
-    subjects: "events"
+    url: ""
+    timeout: ""
+    prefix: ""
+    queueGroup: ""
+    nats:
+      credsSecretName: ""
+      credsFile: "/nats/creds"
+      token: ""
   db:
     uriSecret: tenant-api-db-uri
     certSecret: tenant-api-db-ca

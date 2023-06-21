@@ -20,6 +20,7 @@ import (
 
 	"go.infratographer.com/tenant-api/internal/config"
 	ent "go.infratographer.com/tenant-api/internal/ent/generated"
+	"go.infratographer.com/tenant-api/internal/ent/generated/eventhooks"
 	"go.infratographer.com/tenant-api/internal/graphapi"
 )
 
@@ -90,6 +91,9 @@ func serve(ctx context.Context) {
 	}
 
 	client := ent.NewClient(cOpts...)
+	defer client.Close()
+
+	eventhooks.EventHooks(client)
 
 	srv, err := echox.NewServer(logger.Desugar(), echox.ConfigFromViper(viper.GetViper()), versionx.BuildDetails())
 	if err != nil {

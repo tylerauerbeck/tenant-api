@@ -69,12 +69,20 @@ spec:
               value: "{{ join " " . }}"
           {{- end }}
             - name: TENANTAPI_EVENTS_PUBLISHER_URL
-              value: "{{ .Values.api.events.connectionURL }}"
+              value: "{{ .Values.api.events.url }}"
+            - name: TENANTAPI_EVENTS_PUBLISHER_TIMEOUT
+              value: "{{ .Values.api.events.timeout }}"
             - name: TENANTAPI_EVENTS_PUBLISHER_PREFIX
-              value: "{{ .Values.api.events.subjects }}"
-          {{- if .Values.api.events.auth.secretName }}
+              value: "{{ .Values.api.events.prefix }}"
+            - name: TENANTAPI_EVENTS_PUBLISHER_QUEUEGROUP
+              value: "{{ .Values.api.events.queueGroup }}"
+          {{- if .Values.api.events.nats.credsSecretName }}
             - name: TENANTAPI_EVENTS_PUBLISHER_NATS_CREDSFILE
-              value: "{{ .Values.api.events.credsPath }}"
+              value: "{{ .Values.api.events.nats.credsFile }}"
+          {{- end }}
+          {{- if .Values.api.events.nats.token }}
+            - name: TENANTAPI_EVENTS_PUBLISHER_NATS_TOKEN
+              value: "{{ .Values.api.events.nats.token }}"
           {{- end }}
           {{- if .Values.api.oidc.issuer }}
           {{- with .Values.api.oidc.audience }}
@@ -114,7 +122,7 @@ spec:
               path: /readyz
               port: http
           volumeMounts:
-            {{- if .Values.api.events.auth.secretName  }}
+            {{- if .Values.api.events.nats.credsSecretName  }}
             - name: events-creds
               mountPath: /nats
             {{- end }}
@@ -138,10 +146,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
-        {{- if .Values.api.events.auth.secretName  }}
+        {{- if .Values.api.events.nats.credsSecretName  }}
         - name: events-creds
           secret:
-            secretName: "{{ .Values.api.events.auth.secretName }}"
+            secretName: "{{ .Values.api.events.nats.credsSecretName }}"
         {{- end }}
         {{- if .Values.api.db.certSecret }}
         - name: dbcerts

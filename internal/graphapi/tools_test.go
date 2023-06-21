@@ -91,14 +91,15 @@ func setupDB() {
 		return
 	}
 
-	var err error
-
 	ctx := context.Background()
 
-	testTools.pubsubPublisherConfig, testTools.pubsubSubscriberConfig, err = eventtools.NewNatsServer()
+	nats, err := eventtools.NewNatsServer()
 	if err != nil {
 		log.Panicf("error creating nats server: %s", err.Error())
 	}
+
+	testTools.pubsubPublisherConfig = nats.PublisherConfig
+	testTools.pubsubSubscriberConfig = nats.SubscriberConfig
 
 	testTools.pubsubPublisherConfig.Source = "tenant-api-test"
 
