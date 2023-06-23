@@ -18,6 +18,8 @@ import (
 	"go.infratographer.com/x/versionx"
 	"go.uber.org/zap"
 
+	"go.infratographer.com/permissions-api/pkg/permissions"
+
 	"go.infratographer.com/tenant-api/internal/config"
 	ent "go.infratographer.com/tenant-api/internal/ent/generated"
 	"go.infratographer.com/tenant-api/internal/ent/generated/eventhooks"
@@ -46,6 +48,7 @@ func init() {
 	echox.MustViperFlags(viper.GetViper(), serveCmd.Flags(), APIDefaultListen)
 	echojwtx.MustViperFlags(viper.GetViper(), serveCmd.Flags())
 	events.MustViperFlagsForPublisher(viper.GetViper(), serveCmd.Flags(), appName)
+	permissions.MustViperFlags(viper.GetViper(), serveCmd.Flags())
 
 	// only available as a CLI arg because it shouldn't be something that could accidentially end up in a config file or env var
 	serveCmd.Flags().BoolVar(&serveDevMode, "dev", false, "dev mode: enables playground, disables all auth checks, sets CORS to allow all, pretty logging, etc.")
@@ -112,6 +115,16 @@ func serve(ctx context.Context) {
 
 		middleware = append(middleware, auth.Middleware())
 	}
+
+	perms, err := permissions.New(config.AppConfig.Permissions,
+		permissions.WithLogger(logger),
+		permissions.WithDefaultChecker(permissions.DefaultAllowChecker),
+	)
+	if err != nil {
+		logger.Fatal("failed to initialize permissions", zap.Error(err))
+	}
+
+	middleware = append(middleware, perms.Middleware())
 
 	r := graphapi.NewResolver(client, logger.Named("resolvers"))
 	handler := r.Handler(enablePlayground, middleware)

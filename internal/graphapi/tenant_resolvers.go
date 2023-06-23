@@ -8,19 +8,25 @@ import (
 	"context"
 	"fmt"
 
+	"go.infratographer.com/permissions-api/pkg/permissions"
+	"go.infratographer.com/x/gidx"
+
 	"go.infratographer.com/tenant-api/internal/ent/generated"
 	"go.infratographer.com/tenant-api/internal/ent/generated/tenant"
-	"go.infratographer.com/x/gidx"
 )
 
 // TenantCreate is the resolver for the tenantCreate field.
 func (r *mutationResolver) TenantCreate(ctx context.Context, input generated.CreateTenantInput) (*TenantCreatePayload, error) {
-	// TODO: auth check
-	// if input.TenantID == nil {
-	// 	auth check that actor can make root tenants
-	// } else {
-	// 	auth check that actor can make tenants in parent tenant
-	// }
+	resource := gidx.NullPrefixedID
+
+	if input.ParentID != nil {
+		resource = *input.ParentID
+	}
+
+	if err := permissions.CheckAccess(ctx, resource, actionTenantCreate); err != nil {
+		return nil, err
+	}
+
 	tnt, err := r.client.Tenant.Create().SetInput(input).Save(ctx)
 	if err != nil {
 		return nil, err
@@ -31,7 +37,10 @@ func (r *mutationResolver) TenantCreate(ctx context.Context, input generated.Cre
 
 // TenantUpdate is the resolver for the tenantUpdate field.
 func (r *mutationResolver) TenantUpdate(ctx context.Context, id gidx.PrefixedID, input generated.UpdateTenantInput) (*TenantUpdatePayload, error) {
-	// TODO: auth check
+	if err := permissions.CheckAccess(ctx, id, actionTenantUpdate); err != nil {
+		return nil, err
+	}
+
 	tnt, err := r.client.Tenant.UpdateOneID(id).SetInput(input).Save(ctx)
 	if err != nil {
 		return nil, err
@@ -41,7 +50,10 @@ func (r *mutationResolver) TenantUpdate(ctx context.Context, id gidx.PrefixedID,
 
 // TenantDelete is the resolver for the tenantDelete field.
 func (r *mutationResolver) TenantDelete(ctx context.Context, id gidx.PrefixedID) (*TenantDeletePayload, error) {
-	// TODO: auth check
+	if err := permissions.CheckAccess(ctx, id, actionTenantDelete); err != nil {
+		return nil, err
+	}
+
 	childrenCount, err := r.client.Tenant.Query().Where(tenant.ParentTenantID(id)).Count(ctx)
 	if err != nil {
 		return nil, err
@@ -60,7 +72,10 @@ func (r *mutationResolver) TenantDelete(ctx context.Context, id gidx.PrefixedID)
 
 // Tenant is the resolver for the tenant field.
 func (r *queryResolver) Tenant(ctx context.Context, id gidx.PrefixedID) (*generated.Tenant, error) {
-	// TODO: Auth Check
+	if err := permissions.CheckAccess(ctx, id, actionTenantGet); err != nil {
+		return nil, err
+	}
+
 	return r.client.Tenant.Get(ctx, id)
 }
 

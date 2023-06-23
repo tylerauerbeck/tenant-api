@@ -7,6 +7,7 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.infratographer.com/permissions-api/pkg/permissions"
 	"go.infratographer.com/x/gidx"
 
 	ent "go.infratographer.com/tenant-api/internal/ent/generated"
@@ -15,6 +16,10 @@ import (
 
 func TestTenantQueryByID(t *testing.T) {
 	ctx := context.Background()
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
+
 	tenant := TenantBuilder{}.MustNew(ctx)
 	tenantChild := TenantBuilder{Parent: tenant}.MustNew(ctx)
 
@@ -71,6 +76,10 @@ func TestTenantQueryByID(t *testing.T) {
 
 func TestTenantChildrenSorting(t *testing.T) {
 	ctx := context.Background()
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
+
 	tenant := TenantBuilder{}.MustNew(ctx)
 	nicole := TenantBuilder{Parent: tenant, Name: "Nicole"}.MustNew(ctx)
 	sarah := TenantBuilder{Parent: tenant, Name: "Sarah"}.MustNew(ctx)
@@ -153,6 +162,10 @@ func TestTenantChildrenSorting(t *testing.T) {
 
 func TestTenantChildrenWhereFiltering(t *testing.T) {
 	ctx := context.Background()
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
+
 	parent1 := TenantBuilder{}.MustNew(ctx)
 	parent1Child := TenantBuilder{Parent: parent1}.MustNew(ctx)
 	parent1ChildChild := TenantBuilder{Parent: parent1Child}.MustNew(ctx)
@@ -224,8 +237,24 @@ func TestFullTenantLifecycle(t *testing.T) {
 
 	graphC := graphTestClient(testTools.entClient)
 
-	// create the Root tenant
+	// Deny request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultDenyChecker)
+
+	// deny create the Root tenant
 	rootResp, err := graphC.TenantCreate(ctx, testclient.CreateTenantInput{
+		Name:        name,
+		Description: &description,
+	})
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, permissions.ErrPermissionDenied.Error())
+	require.Nil(t, rootResp)
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
+
+	// create the Root tenant
+	rootResp, err = graphC.TenantCreate(ctx, testclient.CreateTenantInput{
 		Name:        name,
 		Description: &description,
 	})
@@ -241,9 +270,22 @@ func TestFullTenantLifecycle(t *testing.T) {
 	assert.Equal(t, "tnntten", rootTenant.ID.Prefix())
 	assert.Nil(t, rootTenant.Parent)
 
-	// Update the tenant
+	// Deny request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultDenyChecker)
+
+	// Deny Update the tenant
 	newName := gofakeit.DomainName()
 	updatedTenantResp, err := graphC.TenantUpdate(ctx, rootTenant.ID, testclient.UpdateTenantInput{Name: &newName})
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, permissions.ErrPermissionDenied.Error())
+	require.Nil(t, updatedTenantResp)
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
+
+	// Update the tenant
+	updatedTenantResp, err = graphC.TenantUpdate(ctx, rootTenant.ID, testclient.UpdateTenantInput{Name: &newName})
 
 	require.NoError(t, err)
 	require.NotNil(t, updatedTenantResp)
@@ -253,8 +295,21 @@ func TestFullTenantLifecycle(t *testing.T) {
 	assert.EqualValues(t, rootTenant.ID, updatedRootTenant.ID)
 	assert.Equal(t, newName, updatedRootTenant.Name)
 
-	// Query the tenant
+	// Deny request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultDenyChecker)
+
+	// Deny query the tenant
 	queryRootResp, err := graphC.GetTenant(ctx, rootTenant.ID)
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, permissions.ErrPermissionDenied.Error())
+	require.Nil(t, queryRootResp)
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
+
+	// Query the tenant
+	queryRootResp, err = graphC.GetTenant(ctx, rootTenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, queryRootResp)
 	require.NotNil(t, queryRootResp.Tenant)
@@ -290,6 +345,19 @@ func TestFullTenantLifecycle(t *testing.T) {
 	require.NotNil(t, deletedResp)
 	require.NotNil(t, deletedResp.TenantDelete)
 	assert.EqualValues(t, childTenant.ID, deletedResp.TenantDelete.DeletedID.String())
+
+	// Deny request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultDenyChecker)
+
+	// Deny delete the root tenant
+	deletedResp, err = graphC.TenantDelete(ctx, rootTenant.ID)
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, permissions.ErrPermissionDenied.Error())
+	require.Nil(t, deletedResp)
+
+	// Permit request
+	ctx = context.WithValue(ctx, permissions.CheckerCtxKey, permissions.DefaultAllowChecker)
 
 	// delete the root tenant
 	deletedResp, err = graphC.TenantDelete(ctx, rootTenant.ID)

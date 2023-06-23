@@ -8,16 +8,19 @@ import (
 	"go.infratographer.com/x/events"
 	"go.infratographer.com/x/loggingx"
 	"go.infratographer.com/x/otelx"
+
+	"go.infratographer.com/permissions-api/pkg/permissions"
 )
 
 // AppConfig contains the application configuration structure.
 var AppConfig struct {
-	CRDB    crdbx.Config
-	Logging loggingx.Config
-	Events  EventsConfig
-	Server  echox.Config
-	OIDC    echojwtx.AuthConfig
-	Tracing otelx.Config
+	CRDB        crdbx.Config
+	Logging     loggingx.Config
+	Events      EventsConfig
+	Server      echox.Config
+	OIDC        echojwtx.AuthConfig
+	Tracing     otelx.Config
+	Permissions permissions.Config
 }
 
 // EventsConfig stores the configuration for a tenant-api event publisher
