@@ -42,7 +42,7 @@ api:
     url: ""
     timeout: ""
     prefix: ""
-    queueGroup: ""
+    source: ""
     nats:
       credsSecretName: ""
       credsFile: "/nats/creds"
@@ -52,6 +52,9 @@ api:
     certSecret: tenant-api-db-ca
     certMountPath: /dbcerts
     migrateOnInit: true
+
+  permissions:
+    url: ""
 
   oidc:
     audience: ""
