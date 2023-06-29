@@ -64,6 +64,28 @@ spec:
               value: ":{{ .Values.api.listenPort }}"
             - name: TENANTAPI_SERVER_SHUTDOWN_GRACE_PERIOD
               value: "{{ .Values.api.shutdownGracePeriod }}"
+            - name: TENANTAPI_TRACING_ENABLED
+              value: "{{ .Values.api.tracing.enabled }}"
+            - name: TENANTAPI_TRACING_PROVIDER
+              value: "{{ .Values.api.tracing.provider }}"
+            - name: TENANTAPI_TRACING_ENVIRONMENT
+              value: "{{ .Values.api.tracing.environment }}"
+          {{- if eq .Values.api.tracing.provider "jaeger" }}
+            - name: TENANTAPI_TRACING_JAEGER_ENDPOINT
+              value: "{{ .Values.api.tracing.jaeger.endpoint }}"
+            - name: TENANTAPI_TRACING_JAEGER_USER
+              value: "{{ .Values.api.tracing.jaeger.user }}"
+            - name: TENANTAPI_TRACING_JAEGER_PASSWORD
+              value: "{{ .Values.api.tracing.jaeger.password }}"
+          {{- end }}
+          {{- if eq .Values.api.tracing.provider "otlpgrpc" }}
+            - name: TENANTAPI_TRACING_OTLP_ENDPOINT
+              value: "{{ .Values.api.tracing.otlp.endpoint }}"
+            - name: TENANTAPI_TRACING_OTLP_INSECURE
+              value: "{{ .Values.api.tracing.otlp.insecure }}"
+            - name: TENANTAPI_TRACING_OTLP_CERTIFICATE
+              value: "{{ .Values.api.tracing.otlp.certificate }}"
+          {{- end }}
           {{- with .Values.api.trustedProxies }}
             - name: TENANTAPI_SERVER_TRUSTED_PROXIES
               value: "{{ join " " . }}"
