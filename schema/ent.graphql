@@ -45,7 +45,7 @@ type PageInfo @shareable {
   endCursor: Cursor
 }
 type Query
-type Tenant implements Node & ResourceOwner & MetadataNode @key(fields: "id") @prefixedID(prefix: "tnntten") @infratographerRoles(hasRoles: "true", hasParentRoles: "true") {
+type Tenant implements Node & ResourceOwner & MetadataNode @key(fields: "id") @prefixedID(prefix: "tnntten") @infratographerRoles(hasRoles: true, hasParentRoles: true) {
   """ID for the tenant."""
   id: ID!
   createdAt: Time!

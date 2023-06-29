@@ -13,7 +13,7 @@ models:
   Date:
     model: github.com/99designs/gqlgen/graphql.Time
 schema:
-  - "schema.graphql"
+  - "internal/testclient/schema/schema.graphql"
 query:
   - "internal/testclient/*.graphql"
 generate:

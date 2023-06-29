@@ -132,14 +132,14 @@ func rolesDirective(hasRoles bool, hasParentRoles bool) entgql.Annotation {
 			Name: "hasRoles",
 			Value: &ast.Value{
 				Raw:  strconv.FormatBool(hasRoles),
-				Kind: ast.StringValue,
+				Kind: ast.BooleanValue,
 			},
 		},
 		{
 			Name: "hasParentRoles",
 			Value: &ast.Value{
 				Raw:  strconv.FormatBool(hasParentRoles),
-				Kind: ast.StringValue,
+				Kind: ast.BooleanValue,
 			},
 		},
 	}
