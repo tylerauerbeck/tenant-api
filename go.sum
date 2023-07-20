@@ -474,8 +474,8 @@ github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5t
 github.com/zclconf/go-cty v1.8.0 h1:s4AvqaeQzJIu3ndv4gVIhplVD0krU+bgrcLSVUnaWuA=
 github.com/zclconf/go-cty v1.8.0/go.mod h1:vVKLxnk3puL4qRAv72AO+W99LUD4da90g3uUAzyuvAk=
 github.com/zenazn/goji v0.9.0/go.mod h1:7S9M489iMyHBNxwZnk9/EHS098H4/F6TATF2mIxtB1Q=
-go.infratographer.com/permissions-api v0.1.14 h1:I2VEH02LKd8zbnp+aMSucr8Ci4rhffbdN+/5QZpk7j0=
-go.infratographer.com/permissions-api v0.1.14/go.mod h1:aFTC2ZzPEyQpqPp6zTw90lH2tlKSyj9M6cms9JhFQg4=
+go.infratographer.com/permissions-api v0.1.18 h1:arh8nVVpobNMnAvfuasSZnJHeo8Txf+ZHFNszriD4Ms=
+go.infratographer.com/permissions-api v0.1.18/go.mod h1:SpsFT6Rg9Q45NLsP2BJp1H6ZwSdjbMEPb5PSbXr2Vfk=
 go.infratographer.com/x v0.3.4 h1:K7azcoiLZPRdOnr4M7DMyB2DjZzXRVcfr7G6FeQd16o=
 go.infratographer.com/x v0.3.4/go.mod h1:pXXSdeJBisAK3AdED5EFj7Yo8z8td7fOWDkNl4Dkp0s=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
