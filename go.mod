@@ -18,7 +18,7 @@ require (
 	github.com/spf13/viper v1.16.0
 	github.com/stretchr/testify v1.8.4
 	github.com/vektah/gqlparser/v2 v2.5.6
-	github.com/wundergraph/graphql-go-tools v1.63.1
+	github.com/wundergraph/graphql-go-tools v1.64.1
 	go.infratographer.com/permissions-api v0.1.14
 	go.infratographer.com/x v0.3.4
 	go.uber.org/zap v1.24.0
